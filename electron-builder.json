@@ -1,0 +1,18 @@
+// electron-builder.json
+{
+  "appId": "com.lxt.transcriptor",
+  "productName": "LxT Transcriptor",
+  "files": [
+    "main.js",
+    "preload.js",
+    "out/**",
+    "public/**",
+    "node_modules/**"
+  ],
+  "directories": {
+    "buildResources": "public"
+  },
+  "win": {
+    "target": "nsis"
+  }
+}
