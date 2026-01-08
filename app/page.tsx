@@ -1,4 +1,3 @@
-import { Header } from "@/components/header"
 import { HeroSection } from "@/components/hero-section"
 import { FeaturesSection } from "@/components/features-section"
 import { TranscriptionDemo } from "@/components/transcription-demo"
@@ -10,7 +9,6 @@ export default function Home() {
     <main className="min-h-screen relative">
       <AnimatedBackground />
       <div className="relative z-10">
-        <Header />
         <HeroSection />
         <TranscriptionDemo />
         <FeaturesSection />

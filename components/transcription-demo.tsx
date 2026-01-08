@@ -22,7 +22,7 @@ import {
 export function TranscriptionDemo() {
     // Estados para modales
     const [confirmAction, setConfirmAction] = useState<null | {
-      type: "delete-audio" | "delete-transcription" | "retranscribe" | "edit" | "download",
+      type: "delete-audio" | "edit" | "download",
       filename: string
     }>(null);
   const { toast } = useToast();
@@ -32,9 +32,6 @@ export function TranscriptionDemo() {
   };
 
   // Eliminar solo transcripción
-  const handleDeleteTranscription = async (filename: string) => {
-    setConfirmAction({ type: "delete-transcription", filename });
-  };
   const [selectedAudio, setSelectedAudio] = useState<any | null>(null);
   const [transcription, setTranscription] = useState("");
   const [editing, setEditing] = useState(false);
@@ -45,7 +42,7 @@ export function TranscriptionDemo() {
   const [audios, setAudios] = useState<any[]>([]);
   const [transcripts, setTranscripts] = useState<string[]>([]);
   const [loadingList, setLoadingList] = useState(false);
-    const [retranscribing, setRetranscribing] = useState<string | null>(null);
+    // Eliminado: retranscribing, processing
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -86,15 +83,6 @@ export function TranscriptionDemo() {
         setAudios(data.audios);
       } else {
         setAudios([]);
-      }
-      // Obtener lista de transcripciones reales
-      const transcriptData = await fetchTranscripts();
-      if (Array.isArray(transcriptData)) {
-        setTranscripts(transcriptData);
-      } else if (transcriptData && Array.isArray(transcriptData.transcripts)) {
-        setTranscripts(transcriptData.transcripts);
-      } else {
-        setTranscripts([]);
       }
     } catch (e) {
       setAudios([]);
@@ -139,10 +127,6 @@ export function TranscriptionDemo() {
   };
 
   // Guardar transcripción
-    // Volver a transcribir audio
-    const handleRetranscribeAudio = async (filename: string) => {
-      setConfirmAction({ type: "retranscribe", filename });
-    };
   const handleSaveTranscription = async () => {
     if (!selectedAudio) return;
     setConfirmAction({ type: "edit", filename: selectedAudio.filename });
@@ -189,15 +173,11 @@ export function TranscriptionDemo() {
           <DialogHeader>
             <DialogTitle>
               {confirmAction?.type === "delete-audio" && "¿Eliminar audio?"}
-              {confirmAction?.type === "delete-transcription" && "¿Eliminar transcripción?"}
-              {confirmAction?.type === "retranscribe" && "¿Volver a transcribir este audio?"}
               {confirmAction?.type === "edit" && "¿Guardar cambios en la transcripción?"}
               {confirmAction?.type === "download" && "¿Descargar transcripción?"}
             </DialogTitle>
             <DialogDescription>
               {confirmAction?.type === "delete-audio" && `Se eliminará el audio "${confirmAction.filename}" y su transcripción.`}
-              {confirmAction?.type === "delete-transcription" && `Se eliminará solo la transcripción de "${confirmAction.filename}".`}
-              {confirmAction?.type === "retranscribe" && `Esto volverá a procesar el audio "${confirmAction.filename}" y reemplazará la transcripción actual si existe.`}
               {confirmAction?.type === "edit" && `Se guardarán los cambios realizados en la transcripción de "${confirmAction.filename}".`}
               {confirmAction?.type === "download" && `Se descargará la transcripción de "${confirmAction.filename}".`}
             </DialogDescription>
@@ -210,36 +190,22 @@ export function TranscriptionDemo() {
               if (!confirmAction) return;
               if (confirmAction.type === "delete-audio") {
                 try {
+                  // Eliminar audio
                   await deleteAudio(confirmAction.filename);
+                  // Eliminar transcript asociado (nombre base + .txt)
+                  const transcriptName = confirmAction.filename.replace(/\.[^/.]+$/, "") + ".txt";
+                  try {
+                    await deleteTranscription(transcriptName);
+                  } catch (e) {
+                    // Si no existe el transcript, ignorar el error
+                    console.warn("No se pudo eliminar el transcript asociado:", transcriptName);
+                  }
                   toast({ title: "Audio eliminado", description: "El audio y su transcripción fueron eliminados.", variant: "default" });
                   await fetchAudios();
                   setSelectedAudio(null);
                   setTranscription("");
                 } catch (e) {
                   toast({ title: "Error al eliminar el audio", description: "No se pudo eliminar el audio.", variant: "destructive" });
-                }
-              }
-              if (confirmAction.type === "delete-transcription") {
-                try {
-                  await deleteTranscription(confirmAction.filename);
-                  toast({ title: "Transcripción eliminada", description: "La transcripción fue eliminada.", variant: "default" });
-                  setTranscription("");
-                  await fetchAudios(); // Refresca la lista de transcripciones y audios
-                } catch (e) {
-                  toast({ title: "Error al eliminar la transcripción", description: "No se pudo eliminar la transcripción.", variant: "destructive" });
-                }
-              }
-              if (confirmAction.type === "retranscribe") {
-                setRetranscribing(confirmAction.filename);
-                try {
-                  const res = await fetch(`http://127.0.0.1:8000/transcribe?filename=${encodeURIComponent(confirmAction.filename)}`, { method: "POST" });
-                  if (!res.ok) throw new Error("Error al re-transcribir el audio");
-                  toast({ title: "Transcripción en proceso", description: "El audio está siendo re-transcrito.", variant: "default" });
-                  await fetchAudios();
-                } catch (e) {
-                  toast({ title: "Error al re-transcribir", description: "No se pudo re-transcribir el audio.", variant: "destructive" });
-                } finally {
-                  setRetranscribing(null);
                 }
               }
               if (confirmAction.type === "edit") {
@@ -356,32 +322,23 @@ export function TranscriptionDemo() {
                                               <td className="p-2">{audio.created_at || '-'}</td>
                                               <td className="p-2">{audio.duration ? `${audio.duration} s` : '-'}</td>
                                               <td className="p-2 flex gap-2">
-                                                <Button size="sm" variant="destructive" onClick={() => handleDeleteAudio(audio.filename)}>
-                                                  Eliminar audio
-                                                </Button>
-                                                {/* Mostrar botón de re-transcribir si no hay transcripción */}
-                                                {(!audio.has_transcription && !retranscribing) && (
-                                                  <Button size="sm" variant="default" onClick={() => handleRetranscribeAudio(audio.filename)}>
-                                                    Volver a transcribir
-                                                  </Button>
-                                                )}
-                                                {retranscribing === audio.filename && (
-                                                  <Button size="sm" variant="default" disabled>
-                                                    Transcribiendo...
-                                                  </Button>
-                                                )}
-                                                {/* Ver/Editar transcripción por nombre base */}
-                                                <Button size="sm" variant="outline" onClick={() => {
-                                                  const transcriptName = `${audio.name || audio.filename}.txt`;
-                                                  if (transcripts.includes(transcriptName)) {
+                                                <Button
+                                                  size="sm"
+                                                  variant="default"
+                                                  className="font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 transition-all shadow-md border-blue-700 border"
+                                                  onClick={() => {
+                                                    // Remove audio extension for transcript filename
+                                                    const baseName = (audio.name || audio.filename).replace(/\.[^/.]+$/, "");
+                                                    const transcriptName = `${baseName}.txt`;
                                                     setSelectedAudio({ filename: transcriptName });
                                                     setEditing(false);
                                                     fetchTranscriptionLocal(transcriptName);
-                                                  } else {
-                                                    toast({ title: "Transcripción no encontrada", description: `No se encontró la transcripción para ${audio.name || audio.filename}.`, variant: "destructive" });
-                                                  }
-                                                }}>
+                                                  }}
+                                                >
                                                   Ver/Editar
+                                                </Button>
+                                                <Button size="sm" variant="destructive" onClick={() => handleDeleteAudio(audio.filename)}>
+                                                  Eliminar audio y transcripción
                                                 </Button>
                                               </td>
                                             </tr>
@@ -391,55 +348,19 @@ export function TranscriptionDemo() {
                                     </div>
                                   )}
                                 </div>
-                                {/* Transcripciones después */}
-                                <div className="mb-6">
-                                  <h3 className="font-semibold mb-2">Transcripciones disponibles</h3>
-                                  {loadingList ? (
-                                    <div className="text-muted-foreground">Cargando...</div>
-                                  ) : transcripts.length === 0 ? (
-                                    <div className="text-muted-foreground">No hay transcripciones generadas.</div>
-                                  ) : (
-                                    <div className="overflow-x-auto">
-                                      <table className="min-w-full text-sm">
-                                        <thead>
-                                          <tr>
-                                            <th className="text-left p-2">Archivo transcripción</th>
-                                            <th className="text-left p-2">Acciones</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {transcripts.map((filename, idx) => (
-                                            <tr key={filename || idx} className="border-b last:border-0">
-                                              <td className="p-2">{filename}</td>
-                                              <td className="p-2 flex gap-2">
-                                                <Button size="sm" variant="outline" onClick={() => {
-                                                  setSelectedAudio({ filename });
-                                                  setEditing(false);
-                                                  fetchTranscriptionLocal(filename);
-                                                }}>
-                                                  Ver/Editar
-                                                </Button>
-                                                <Button size="sm" variant="ghost" className="transition-all hover:scale-110" onClick={() => downloadTranscription(filename)}>
-                                                  <Download className="h-4 w-4" />
-                                                </Button>
-                                                <Button size="sm" variant="destructive" onClick={() => handleDeleteTranscription(filename)}>
-                                                  Eliminar transcripción
-                                                </Button>
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  )}
-                                </div>
+                                {/* Transcripciones después - Eliminado, ahora cada audio tiene su transcript asociado */}
                 {selectedAudio && (
                   <div className="mt-8">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-semibold">Transcripción de: {selectedAudio.filename || selectedAudio.name}</h3>
                       <div className="flex items-center gap-2">
                         {!editing ? (
-                          <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 transition-all shadow-md border-blue-700 border"
+                            onClick={() => setEditing(true)}
+                          >
                             Editar
                           </Button>
                         ) : (
@@ -450,9 +371,7 @@ export function TranscriptionDemo() {
                         <Button size="sm" variant="ghost" className="transition-all hover:scale-110" onClick={handleDownloadTranscription}>
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleDeleteTranscription(selectedAudio.filename)}>
-                          Eliminar transcripción
-                        </Button>
+                        {/* Eliminar transcripción ya no es una acción permitida, solo eliminar audio */}
                       </div>
                     </div>
                     <div className="min-h-[200px] rounded-lg bg-muted/50 p-4 transition-all hover:bg-muted/70">
@@ -472,17 +391,6 @@ export function TranscriptionDemo() {
                   </div>
                 )}
 
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primary transition-all hover:bg-primary/20 animate-in fade-in duration-500">
-                    Español detectado
-                  </span>
-                  <span className="rounded-full bg-accent/10 px-3 py-1 text-xs text-accent transition-all hover:bg-accent/20 animate-in fade-in duration-500 delay-100">
-                    1 hablante
-                  </span>
-                  <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground transition-all hover:bg-muted/80 animate-in fade-in duration-500 delay-200">
-                    Alta precisión
-                  </span>
-                </div>
               </div>
             </CardContent>
           </Card>

@@ -1,7 +1,7 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { Menu } from "lucide-react"
+
+import { HeaderLink } from "@/components/ui/header-link"
 
 export function Header() {
   return (
@@ -15,32 +15,11 @@ export function Header() {
         </div>
 
         <nav className="hidden items-center gap-6 md:flex">
-          <a
-            href="#features"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Características
-          </a>
-          <a href="#demo" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-            Demo
-          </a>
-          <a
-            href="#pricing"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Precios
-          </a>
+          <HeaderLink href="/">Inicio</HeaderLink>
+          <HeaderLink href="/">Transcribir</HeaderLink>
+          <HeaderLink href="/soporte">Soporte</HeaderLink>
+          <HeaderLink href="/contacto">Contacto</HeaderLink>
         </nav>
-
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" className="hidden md:inline-flex">
-            Iniciar sesión
-          </Button>
-          <Button className="hidden md:inline-flex">Comenzar gratis</Button>
-          <Button variant="ghost" size="icon" className="md:hidden">
-            <Menu className="h-5 w-5" />
-          </Button>
-        </div>
       </div>
     </header>
   )

@@ -15,6 +15,9 @@ function createWindow() {
     },
   });
 
+  // Remove all default menus for a clean UI
+  win.setMenu(null);
+
   win.loadURL('http://localhost:3000'); // React dev server or build output
 }
 
