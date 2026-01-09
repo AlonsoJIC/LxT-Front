@@ -10,7 +10,6 @@ export default function Home() {
       <AnimatedBackground />
       <div className="relative z-10">
         <HeroSection />
-        <TranscriptionDemo />
         <FeaturesSection />
         <Footer />
       </div>

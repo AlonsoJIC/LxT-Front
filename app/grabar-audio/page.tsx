@@ -3,9 +3,11 @@
 import { AnimatedBackground } from "@/components/animated-background"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Mic, Square, Play, Pause, Trash2, Loader2 } from "lucide-react"
-import { useState, useRef, useEffect } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Mic, Square, Play, Pause, Trash2, Loader2, FileText, FilePlus2, Clipboard } from "lucide-react"
+import { useState, useRef, useEffect, useCallback } from "react"
+import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription } from "@/lib/apiService"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function GrabarAudioPage() {
   const [isRecording, setIsRecording] = useState(false)
@@ -16,6 +18,68 @@ export default function GrabarAudioPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const [isVisible, setIsVisible] = useState(false);
+  useEffect(() => { setIsVisible(true); }, []);
+  // Estados y lógica de audios subidos y transcripción
+  const [audios, setAudios] = useState<any[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [selectedAudio, setSelectedAudio] = useState<any | null>(null);
+  const [transcription, setTranscription] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchAudios();
+  }, []);
+
+  const fetchAudios = useCallback(async () => {
+    setLoadingList(true);
+    try {
+      const data = await fetchAudiosApi();
+      if (Array.isArray(data)) {
+        setAudios(data);
+      } else if (data && Array.isArray(data.audios)) {
+        setAudios(data.audios);
+      } else {
+        setAudios([]);
+      }
+    } catch (e) {
+      setAudios([]);
+    } finally {
+      setLoadingList(false);
+    }
+  }, []);
+
+  const handleDeleteAudio = async (filename: string) => {
+    try {
+      await deleteAudio(filename);
+      await fetchAudios();
+      setSelectedAudio(null);
+      setTranscription("");
+    } catch (e) {}
+  };
+
+  const fetchTranscriptionLocal = async (filename: string) => {
+    try {
+      const data: any = await fetchTranscription(filename);
+      setTranscription(data.text || "");
+      setSelectedAudio({ filename });
+      setEditing(false);
+    } catch (e) {
+      setTranscription("");
+    }
+  };
+
+  const handleSaveTranscription = async () => {
+    if (!selectedAudio) return;
+    setSaving(true);
+    try {
+      await saveTranscription(selectedAudio.filename, transcription);
+      setEditing(false);
+    } catch (e) {}
+    setSaving(false);
+  };
 
   useEffect(() => {
     return () => {
@@ -79,11 +143,34 @@ export default function GrabarAudioPage() {
     }
   }
 
+
   const deleteRecording = () => {
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl)
       setAudioUrl(null)
       setRecordingTime(0)
+    }
+  }
+
+  // Subir audio grabado
+  const uploadRecordedAudio = async () => {
+    if (!audioUrl) return;
+    setIsProcessing(true);
+    try {
+      // Obtener el blob del audio grabado
+      const response = await fetch(audioUrl);
+      const blob = await response.blob();
+      // Crear un archivo con nombre y tipo adecuado
+      const file = new File([blob], `grabacion_${Date.now()}.webm`, { type: blob.type });
+      await uploadAudio(file);
+      toast({ title: "Audio subido", description: "El audio grabado se subió correctamente.", variant: "default" });
+      setAudioUrl(null);
+      setRecordingTime(0);
+      await fetchAudios();
+    } catch (e) {
+      toast({ title: "Error", description: "No se pudo subir el audio grabado.", variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
     }
   }
 
@@ -100,20 +187,28 @@ export default function GrabarAudioPage() {
   }
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen animate-fade-in">
       <AnimatedBackground />
-      <main className="relative z-10 container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12 animate-fade-in">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-balance">
-              Grabar <span className="text-primary">Audio</span>
-            </h1>
-            <p className="text-lg text-muted-foreground text-pretty">
-              Graba directamente desde tu micrófono y obtén transcripciones en tiempo real
-            </p>
-          </div>
+      <main className="relative z-10 container mx-auto px-4 py-16 animate-fade-in-up">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1
+            className={`text-4xl md:text-5xl font-bold mb-4 text-balance transition-all duration-700 delay-100 ${
+              isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
+            }`}
+          >
+            Grabar <span className="text-primary">Audio</span>
+          </h1>
+          <p
+            className={`text-lg text-muted-foreground text-pretty transition-all duration-700 delay-200 ${
+              isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
+            }`}
+          >
+            Graba directamente desde tu micrófono y obtén transcripciones en tiempo real
+          </p>
 
-          <Card className="p-8 mb-8 animate-fade-in-up">
+          <Card
+            className={`p-8 mb-8 transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}
+          >
             <div className="flex flex-col items-center">
               <div
                 className={`relative w-48 h-48 mb-8 rounded-full flex items-center justify-center transition-all duration-300 ${
@@ -167,49 +262,169 @@ export default function GrabarAudioPage() {
                       <Trash2 className="w-4 h-4" />
                       Eliminar
                     </Button>
-                    <Button onClick={transcribeAudio} disabled={isProcessing} className="gap-2">
+                    <Button onClick={uploadRecordedAudio} disabled={isProcessing} className="gap-2 bg-primary text-white hover:bg-primary/90">
                       {isProcessing ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Procesando...
+                          Subiendo...
                         </>
                       ) : (
-                        "Transcribir audio"
+                        "Subir audio"
                       )}
                     </Button>
                   </div>
                 </div>
               )}
             </div>
+                          <div className="space-y-4">
+                <div className={`mb-6 transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}> 
+                  <h3 className="font-semibold mb-2">Audios</h3>
+                  {loadingList ? (
+                    <div className="text-muted-foreground">Cargando...</div>
+                  ) : audios.length === 0 ? (
+                    <div className="text-muted-foreground">No hay audios subidos.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr>
+                            <th className="text-left p-2">Archivo</th>
+                            <th className="text-left p-2">Fecha</th>
+                            <th className="text-left p-2">Duración</th>
+                            <th className="text-left p-2">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {audios.map((audio: any, idx: any) => (
+                            <tr key={audio.id || idx} className="border-b last:border-0">
+                              <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.filename || audio.name}</td>
+                              <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.created_at || '-'}</td>
+                              <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.duration ? `${audio.duration} s` : '-'}</td>
+                              <td className="p-2 flex gap-2 align-middle whitespace-nowrap text-left">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 transition-all shadow-md border-blue-700 border"
+                                  onClick={() => {
+                                    const baseName = (audio.name || audio.filename).replace(/\.[^/.]+$/, "");
+                                    const transcriptName = `${baseName}.txt`;
+                                    setSelectedAudio({ filename: transcriptName });
+                                    setEditing(false);
+                                    fetchTranscriptionLocal(transcriptName);
+                                  }}
+                                >
+                                  Ver/Editar
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleDeleteAudio(audio.filename)}>
+                                  Eliminar audio y transcripción
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                {/* Transcripción seleccionada */}
+                {selectedAudio && (
+                  <div className="mt-8">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold">Transcripción de: {selectedAudio.filename || selectedAudio.name}</h3>
+                      <div className="flex items-center gap-2">
+                        {!editing ? (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 transition-all shadow-md border-blue-700 border"
+                            onClick={() => setEditing(true)}
+                          >
+                            Editar
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="default" onClick={handleSaveTranscription} disabled={saving}>
+                            {saving ? "Guardando..." : "Guardar"}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="transition-all hover:scale-110"
+                          title="Descargar TXT"
+                          onClick={() => {
+                            if (!selectedAudio) return;
+                            const url = `http://127.0.0.1:8000/transcript/download/${selectedAudio.filename}`;
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `${selectedAudio.filename || "transcripcion"}.txt`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            toast({ title: "Descarga TXT", description: "La descarga del archivo TXT ha comenzado.", variant: "default" });
+                          }}
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="transition-all hover:scale-110"
+                          title="Descargar DOCX"
+                          onClick={() => {
+                            if (!selectedAudio) return;
+                            const url = `http://127.0.0.1:8000/transcript/export_docx/${selectedAudio.filename}`;
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = selectedAudio.filename.replace(/\.[^/.]+$/, "") + ".docx";
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            toast({ title: "Descarga DOCX", description: "La descarga del archivo DOCX ha comenzado.", variant: "default" });
+                          }}
+                        >
+                          <FilePlus2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="transition-all hover:scale-110"
+                          title="Copiar al portapapeles"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(transcription);
+                              toast({ title: "Copiado", description: "La transcripción se copió al portapapeles.", variant: "default" });
+                            } catch {
+                              toast({ title: "Error", description: "No se pudo copiar al portapapeles.", variant: "destructive" });
+                            }
+                          }}
+                        >
+                          <Clipboard className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="min-h-[200px] rounded-lg bg-muted/50 p-4 transition-all hover:bg-muted/70">
+                      {editing ? (
+                        <textarea
+                          className="w-full h-40 p-2 rounded border"
+                          value={transcription}
+                          onChange={e => setTranscription(e.target.value)}
+                          disabled={saving}
+                        />
+                      ) : (
+                        <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                          {transcription || "No hay transcripción disponible."}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
           </Card>
 
-          <div className="grid md:grid-cols-3 gap-6 animate-fade-in-up">
-            <Card className="p-6 text-center hover:border-primary/50 transition-colors">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">🎙️</span>
-              </div>
-              <h3 className="font-semibold mb-2">Alta calidad</h3>
-              <p className="text-sm text-muted-foreground">Grabación en formato profesional</p>
-            </Card>
-            <Card className="p-6 text-center hover:border-primary/50 transition-colors">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">⏱️</span>
-              </div>
-              <h3 className="font-semibold mb-2">Sin límites</h3>
-              <p className="text-sm text-muted-foreground">Graba todo el tiempo que necesites</p>
-            </Card>
-            <Card className="p-6 text-center hover:border-primary/50 transition-colors">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">💾</span>
-              </div>
-              <h3 className="font-semibold mb-2">Guardar</h3>
-              <p className="text-sm text-muted-foreground">Descarga tus grabaciones</p>
-            </Card>
-          </div>
         </div>
       </main>
 
       <Footer />
     </div>
-  )
+  );
 }

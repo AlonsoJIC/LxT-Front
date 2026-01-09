@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { FileAudio, Download, Trash2, Search, Clock, FileText } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 const mockFiles = [
   {
@@ -54,20 +54,32 @@ const mockFiles = [
 export default function ArchivosPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [files] = useState(mockFiles)
+  const [isVisible, setIsVisible] = useState(false);
+  useEffect(() => { setIsVisible(true); }, []);
 
   const filteredFiles = files.filter((file) => file.name.toLowerCase().includes(searchQuery.toLowerCase()))
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen animate-fade-in">
       <AnimatedBackground />
-      <main className="relative z-10 container mx-auto px-4 py-16">
+      <main className="relative z-10 container mx-auto px-4 py-16 animate-fade-in-up">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12 animate-fade-in">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
             <div>
-              <h1 className="text-4xl md:text-5xl font-bold mb-2 text-balance">
+              <h1
+                className={`text-4xl md:text-5xl font-bold mb-2 text-balance transition-all duration-700 delay-100 ${
+                  isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
+                }`}
+              >
                 Mis <span className="text-primary">Archivos</span>
               </h1>
-              <p className="text-muted-foreground">Gestiona todas tus transcripciones en un solo lugar</p>
+              <p
+                className={`text-muted-foreground transition-all duration-700 delay-200 ${
+                  isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
+                }`}
+              >
+                Gestiona todas tus transcripciones en un solo lugar
+              </p>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" asChild>
@@ -91,7 +103,7 @@ export default function ArchivosPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 animate-fade-in-up">
+          <div className={`grid gap-4 transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}> 
             {filteredFiles.map((file) => (
               <Card key={file.id} className="p-6 hover:border-primary/50 transition-all duration-300 group">
                 <div className="flex items-center gap-4">

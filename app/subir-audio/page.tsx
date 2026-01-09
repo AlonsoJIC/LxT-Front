@@ -1,152 +1,324 @@
 "use client"
 
-import type React from "react"
-
+import { useState, useEffect, useRef, useCallback } from "react"
 import { AnimatedBackground } from "@/components/animated-background"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Upload, FileAudio, CheckCircle, Loader2 } from "lucide-react"
-import { useState, useCallback } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Upload, FileAudio, CheckCircle, Loader2, FileText, FilePlus2, Clipboard } from "lucide-react"
+import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription } from "@/lib/apiService"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function SubirAudioPage() {
-  const [isDragging, setIsDragging] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+  const [dragActive, setDragActive] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [audios, setAudios] = useState<any[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [selectedAudio, setSelectedAudio] = useState<any | null>(null);
+  const [transcription, setTranscription] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const [isVisible, setIsVisible] = useState(false);
+  useEffect(() => { setIsVisible(true); }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }, [])
+  useEffect(() => {
+    fetchAudios();
+  }, []);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }, [])
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const droppedFile = e.dataTransfer.files[0]
-    if (droppedFile && droppedFile.type.startsWith("audio/")) {
-      setFile(droppedFile)
+  const fetchAudios = useCallback(async () => {
+    setLoadingList(true);
+    try {
+      const data = await fetchAudiosApi();
+      if (Array.isArray(data)) {
+        setAudios(data);
+      } else if (data && Array.isArray(data.audios)) {
+        setAudios(data.audios);
+      } else {
+        setAudios([]);
+      }
+    } catch (e) {
+      setAudios([]);
+    } finally {
+      setLoadingList(false);
     }
-  }, [])
+  }, []);
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
-    if (selectedFile) {
-      setFile(selectedFile)
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      await uploadAudio(file);
+      await fetchAudios();
+    } catch (e) {
+      // Puedes agregar un toast aquí si tienes sistema de notificaciones
+    } finally {
+      setUploading(false);
     }
-  }
+  };
 
-  const handleUpload = async () => {
-    if (!file) return
-    setIsUploading(true)
-    // Simulate upload
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsUploading(false)
-  }
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+    else if (e.type === 'dragleave') setDragActive(false);
+  };
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileUpload(e.target.files[0]);
+    }
+  };
+
+  const handleDeleteAudio = async (filename: string) => {
+    try {
+      await deleteAudio(filename);
+      await fetchAudios();
+      setSelectedAudio(null);
+      setTranscription("");
+    } catch (e) {}
+  };
+
+  const fetchTranscriptionLocal = async (filename: string) => {
+    try {
+      const data: any = await fetchTranscription(filename);
+      setTranscription(data.text || "");
+      setSelectedAudio({ filename });
+      setEditing(false);
+    } catch (e) {
+      setTranscription("");
+    }
+  };
+
+  const handleSaveTranscription = async () => {
+    if (!selectedAudio) return;
+    setSaving(true);
+    try {
+      await saveTranscription(selectedAudio.filename, transcription);
+      setEditing(false);
+    } catch (e) {}
+    setSaving(false);
+  };
 
   return (
     <div className="relative min-h-screen">
       <AnimatedBackground />
       <main className="relative z-10 container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12 animate-fade-in">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-balance">
-              Subir <span className="text-primary">Audio</span>
-            </h1>
-            <p className="text-lg text-muted-foreground text-pretty">
-              Sube tus archivos de audio para transcribirlos automáticamente con IA de última generación
-            </p>
-          </div>
-
-          <Card
-            className={`p-8 mb-8 border-2 transition-all duration-300 animate-fade-in-up ${
-              isDragging ? "border-primary bg-primary/5" : "border-dashed"
+        <div className="max-w-4xl mx-auto text-center">
+          <h1
+            className={`text-4xl md:text-5xl font-bold mb-4 text-balance transition-all duration-700 delay-100 ${
+              isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
             }`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
           >
-            {!file ? (
-              <div className="text-center py-12">
-                <div className="mb-6 flex justify-center">
-                  <div className="p-4 rounded-full bg-primary/10">
-                    <Upload className="w-12 h-12 text-primary" />
-                  </div>
-                </div>
-                <h3 className="text-xl font-semibold mb-2">Arrastra tu archivo aquí</h3>
-                <p className="text-muted-foreground mb-6">O haz clic para seleccionar un archivo</p>
-                <input type="file" accept="audio/*" onChange={handleFileInput} className="hidden" id="file-input" />
-                <label htmlFor="file-input">
-                  <Button asChild className="cursor-pointer">
-                    <span>Seleccionar archivo</span>
-                  </Button>
-                </label>
-                <p className="text-sm text-muted-foreground mt-4">
-                  Formatos soportados: MP3, WAV, M4A, OGG (máx. 500MB)
-                </p>
-              </div>
-            ) : (
-              <div className="py-8">
-                <div className="flex items-center gap-4 mb-6 p-4 bg-muted rounded-lg">
-                  <FileAudio className="w-8 h-8 text-primary" />
-                  <div className="flex-1">
-                    <h4 className="font-semibold">{file.name}</h4>
-                    <p className="text-sm text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                  </div>
-                  {!isUploading && (
-                    <Button variant="ghost" size="sm" onClick={() => setFile(null)}>
-                      Eliminar
-                    </Button>
-                  )}
-                </div>
-                <Button onClick={handleUpload} disabled={isUploading} className="w-full" size="lg">
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Procesando...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Iniciar transcripción
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-          </Card>
+            Subir <span className="text-primary">Audio</span>
+          </h1>
+          <p
+            className={`text-lg text-muted-foreground text-pretty transition-all duration-700 delay-200 ${
+              isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
+            }`}
+          >
+            Sube tus archivos de audio para transcribirlos automáticamente con IA de última generación
+          </p>
 
-          <div className="grid md:grid-cols-3 gap-6 animate-fade-in-up">
-            <Card className="p-6 text-center hover:border-primary/50 transition-colors">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">⚡</span>
+          {/* Drag and drop reemplazado por el componente y lógica de subida de audio de transcription-demo */}
+          <Card className="border-border/50 transition-all hover:shadow-xl hover:shadow-primary/5">
+            <CardContent className="p-8">
+              <div
+                className={`mb-8 flex flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed border-border/50 bg-muted/30 py-16 sm:flex-row transition-all hover:border-primary/30 hover:bg-muted/50 relative transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'} ${dragActive ? 'border-primary bg-primary/10' : ''}`}
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+              >
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="gap-2 bg-transparent transition-all hover:scale-105"
+                  onClick={() => inputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  <Upload className="h-5 w-5" />
+                  Sube o suelta un archivo de audio
+                </Button>
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={handleInputChange}
+                  disabled={uploading}
+                />
+                {dragActive && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-primary/10 pointer-events-none">
+                    <span className="text-primary font-semibold">Suelta el archivo aquí</span>
+                  </div>
+                )}
+                {uploading && (
+                  <div className="absolute inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60">
+                    <div className="text-white text-1xl font-bold animate-pulse p-8 rounded-xl shadow-xl bg-primary/80">
+                      El audio se está transcribiendo, esto puede tardar varios minutos dependiendo el audio,<br />por favor no cierre la aplicación
+                    </div>
+                  </div>
+                )}
               </div>
-              <h3 className="font-semibold mb-2">Rápido</h3>
-              <p className="text-sm text-muted-foreground">Transcripción en minutos</p>
-            </Card>
-            <Card className="p-6 text-center hover:border-primary/50 transition-colors">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">🎯</span>
+              {/* Audios subidos */}
+              <div className="space-y-4">
+                <div className={`mb-6 transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}> 
+                  <h3 className="font-semibold mb-2">Audios</h3>
+                  {loadingList ? (
+                    <div className="text-muted-foreground">Cargando...</div>
+                  ) : audios.length === 0 ? (
+                    <div className="text-muted-foreground">No hay audios subidos.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr>
+                            <th className="text-left p-2">Archivo</th>
+                            <th className="text-left p-2">Fecha</th>
+                            <th className="text-left p-2">Duración</th>
+                            <th className="text-left p-2">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {audios.map((audio, idx) => (
+                            <tr key={audio.id || idx} className="border-b last:border-0">
+                              <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.filename || audio.name}</td>
+                              <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.created_at || '-'}</td>
+                              <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.duration ? `${audio.duration} s` : '-'}</td>
+                              <td className="p-2 flex gap-2 align-middle whitespace-nowrap text-left">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 transition-all shadow-md border-blue-700 border"
+                                  onClick={() => {
+                                    // Remove audio extension for transcript filename
+                                    const baseName = (audio.name || audio.filename).replace(/\.[^/.]+$/, "");
+                                    const transcriptName = `${baseName}.txt`;
+                                    setSelectedAudio({ filename: transcriptName });
+                                    setEditing(false);
+                                    fetchTranscriptionLocal(transcriptName);
+                                  }}
+                                >
+                                  Ver/Editar
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleDeleteAudio(audio.filename)}>
+                                  Eliminar audio y transcripción
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                {/* Transcripción seleccionada */}
+                {selectedAudio && (
+                  <div className="mt-8">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold">Transcripción de: {selectedAudio.filename || selectedAudio.name}</h3>
+                      <div className="flex items-center gap-2">
+                        {!editing ? (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 transition-all shadow-md border-blue-700 border"
+                            onClick={() => setEditing(true)}
+                          >
+                            Editar
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="default" onClick={handleSaveTranscription} disabled={saving}>
+                            {saving ? "Guardando..." : "Guardar"}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="transition-all hover:scale-110"
+                          title="Descargar TXT"
+                          onClick={() => {
+                            if (!selectedAudio) return;
+                            const url = `http://127.0.0.1:8000/transcript/download/${selectedAudio.filename}`;
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `${selectedAudio.filename || "transcripcion"}.txt`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            toast({ title: "Descarga TXT", description: "La descarga del archivo TXT ha comenzado.", variant: "default" });
+                          }}
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="transition-all hover:scale-110"
+                          title="Descargar DOCX"
+                          onClick={() => {
+                            if (!selectedAudio) return;
+                            const url = `http://127.0.0.1:8000/transcript/export_docx/${selectedAudio.filename}`;
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = selectedAudio.filename.replace(/\.[^/.]+$/, "") + ".docx";
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            toast({ title: "Descarga DOCX", description: "La descarga del archivo DOCX ha comenzado.", variant: "default" });
+                          }}
+                        >
+                          <FilePlus2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="transition-all hover:scale-110"
+                          title="Copiar al portapapeles"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(transcription);
+                              toast({ title: "Copiado", description: "La transcripción se copió al portapapeles.", variant: "default" });
+                            } catch {
+                              toast({ title: "Error", description: "No se pudo copiar al portapapeles.", variant: "destructive" });
+                            }
+                          }}
+                        >
+                          <Clipboard className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="min-h-[200px] rounded-lg bg-muted/50 p-4 transition-all hover:bg-muted/70">
+                      {editing ? (
+                        <textarea
+                          className="w-full h-40 p-2 rounded border"
+                          value={transcription}
+                          onChange={e => setTranscription(e.target.value)}
+                          disabled={saving}
+                        />
+                      ) : (
+                        <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                          {transcription || "No hay transcripción disponible."}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              <h3 className="font-semibold mb-2">Preciso</h3>
-              <p className="text-sm text-muted-foreground">99% de precisión con IA</p>
-            </Card>
-            <Card className="p-6 text-center hover:border-primary/50 transition-colors">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">🔒</span>
-              </div>
-              <h3 className="font-semibold mb-2">Seguro</h3>
-              <p className="text-sm text-muted-foreground">Cifrado de extremo a extremo</p>
-            </Card>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </main>
 
       <Footer />
     </div>
-  )
+  );
 }

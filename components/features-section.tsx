@@ -52,7 +52,7 @@ export function FeaturesSection() {
   }, [])
 
   return (
-    <section id="features" className="border-b border-border/40 py-24" ref={sectionRef}>
+    <section id="features" className="border-b border-border/40 mb-10" ref={sectionRef}>
       <div className="container mx-auto px-4">
         <div className="mx-auto mb-16 max-w-2xl text-center">
           <h2 className="mb-4 text-balance text-3xl font-bold sm:text-4xl">Características profesionales</h2>
