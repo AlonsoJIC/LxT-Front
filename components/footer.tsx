@@ -1,4 +1,5 @@
 import { FooterLink } from "@/components/ui/footer-link";
+import { FaLinkedin, FaInstagram, FaGlobe } from "react-icons/fa";
 
 export function Footer() {
   return (
@@ -13,7 +14,7 @@ export function Footer() {
               <span className="font-semibold">LxT</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Transcripción profesional impulsada por IA, aplicación enfocada en la seguridad de tus datos.
+              Transcripción profesional impulsada por IA, nos enfocamos en la seguridad de tus datos.
             </p>
           </div>
 
@@ -47,18 +48,31 @@ export function Footer() {
         </div>
 
         <div className="mt-12 border-t border-border/40 pt-8 text-center text-sm text-muted-foreground">
-          <div className="mb-2 flex justify-center items-center gap-2">
-            <span>Creado y diseñado por </span>
-            <a
-              href="https://dev-alonso.vercel.app/portfolio"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-primary underline underline-offset-4 hover:text-blue-700 transition-colors"
-            >
-              Alonso
-            </a>
-            <span className="text-2xl">🦈</span>
-            <span className="text-2xl">❤️</span>
+          <div className="mb-2 flex flex-col justify-center items-center gap-1">
+            <div className="flex items-center gap-2">
+              <span>Creado y diseñado por </span>
+              <a
+                href="https://dev-alonso.vercel.app/portfolio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-primary underline underline-offset-4 hover:text-blue-700 transition-colors"
+              >
+                Alonso
+              </a>
+              <span className="text-2xl">🦈</span>
+              <span className="text-2xl">❤️</span>
+            </div>
+            <div className="flex gap-2 mt-1">
+              <a href="https://dev-alonso.vercel.app/portfolio" target="_blank" rel="noopener noreferrer" aria-label="Portafolio" className="mx-1 text-muted-foreground hover:text-primary transition-colors">
+                <FaGlobe size={18} />
+              </a>
+              <a href="https://www.linkedin.com/in/alonsojic/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="mx-1 text-muted-foreground hover:text-primary transition-colors">
+                <FaLinkedin size={18} />
+              </a>
+              <a href="https://www.instagram.com/alonsojic/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="mx-1 text-muted-foreground hover:text-primary transition-colors">
+                <FaInstagram size={18} />
+              </a>
+            </div>
           </div>
           <p>© 2026 LxT. Todos los derechos reservados.</p>
         </div>
