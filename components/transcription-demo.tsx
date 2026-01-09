@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { useToast } from "@/components/ui/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Mic, Upload, Play, Pause, Download } from "lucide-react"
+import { Mic, Upload, Play, Pause, Download, FileText, FilePlus2, Clipboard } from "lucide-react"
 import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, downloadTranscription, deleteAudio, deleteTranscription, fetchTranscripts } from "@/lib/apiService"
 import {
   Dialog,
@@ -136,6 +136,29 @@ export function TranscriptionDemo() {
   const handleDownloadTranscription = () => {
     if (!selectedAudio) return;
     setConfirmAction({ type: "download", filename: selectedAudio.filename });
+  };
+
+  // Descargar DOCX
+  const handleDownloadDocx = () => {
+    if (!selectedAudio) return;
+    const url = `http://127.0.0.1:8000/transcript/export_docx/${selectedAudio.filename}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = selectedAudio.filename.replace(/\.[^/.]+$/, "") + ".docx";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast({ title: "Exportación DOCX", description: "La descarga del archivo DOCX ha comenzado.", variant: "default" });
+  };
+
+  // Copiar al portapapeles
+  const handleCopyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(transcription);
+      toast({ title: "Copiado", description: "La transcripción se copió al portapapeles.", variant: "default" });
+    } catch {
+      toast({ title: "Error", description: "No se pudo copiar al portapapeles.", variant: "destructive" });
+    }
   };
 
   useEffect(() => {
@@ -368,8 +391,14 @@ export function TranscriptionDemo() {
                             {saving ? "Guardando..." : "Guardar"}
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" className="transition-all hover:scale-110" onClick={handleDownloadTranscription}>
-                          <Download className="h-4 w-4" />
+                        <Button size="sm" variant="ghost" className="transition-all hover:scale-110" onClick={handleDownloadTranscription} title="Descargar TXT">
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="transition-all hover:scale-110" onClick={handleDownloadDocx} title="Descargar DOCX">
+                          <FilePlus2 className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="transition-all hover:scale-110" onClick={handleCopyToClipboard} title="Copiar al portapapeles">
+                          <Clipboard className="h-4 w-4" />
                         </Button>
                         {/* Eliminar transcripción ya no es una acción permitida, solo eliminar audio */}
                       </div>

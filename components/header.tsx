@@ -16,7 +16,9 @@ export function Header() {
 
         <nav className="hidden items-center gap-6 md:flex">
           <HeaderLink href="/">Inicio</HeaderLink>
-          <HeaderLink href="/">Transcribir</HeaderLink>
+          <HeaderLink href="/subir-audio">Subir audio</HeaderLink>
+          <HeaderLink href="/grabar-audio">Grabar audio</HeaderLink>
+          <HeaderLink href="/archivos">Archivos</HeaderLink>
           <HeaderLink href="/soporte">Soporte</HeaderLink>
           <HeaderLink href="/contacto">Contacto</HeaderLink>
         </nav>
