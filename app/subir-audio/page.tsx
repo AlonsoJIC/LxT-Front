@@ -8,6 +8,17 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Upload, FileAudio, CheckCircle, Loader2, FileText, FilePlus2, Clipboard } from "lucide-react"
 import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription } from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
 
 export default function SubirAudioPage() {
   const [dragActive, setDragActive] = useState(false);
@@ -18,6 +29,8 @@ export default function SubirAudioPage() {
   const [transcription, setTranscription] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<null | { type: 'save' | 'download-txt' | 'download-docx', filename: string }>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [isVisible, setIsVisible] = useState(false);
@@ -78,12 +91,29 @@ export default function SubirAudioPage() {
   };
 
   const handleDeleteAudio = async (filename: string) => {
+    setConfirmDelete(filename);
+  };
+
+  const confirmDeleteAudio = async () => {
+    if (!confirmDelete) return;
     try {
-      await deleteAudio(filename);
+      await deleteAudio(confirmDelete);
+      // Eliminar transcript asociado (nombre base + .txt)
+      const transcriptName = confirmDelete.replace(/\.[^/.]+$/, "") + ".txt";
+      try {
+        await deleteTranscription(transcriptName);
+      } catch (e) {
+        // Si no existe el transcript, ignorar el error
+        console.warn("No se pudo eliminar el transcript asociado:", transcriptName);
+      }
       await fetchAudios();
       setSelectedAudio(null);
       setTranscription("");
-    } catch (e) {}
+      toast({ title: "Audio eliminado", description: "El audio y su transcripción fueron eliminados.", variant: "default" });
+    } catch (e) {
+      toast({ title: "Error al eliminar", description: "No se pudo eliminar el audio.", variant: "destructive" });
+    }
+    setConfirmDelete(null);
   };
 
   const fetchTranscriptionLocal = async (filename: string) => {
@@ -92,19 +122,64 @@ export default function SubirAudioPage() {
       setTranscription(data.text || "");
       setSelectedAudio({ filename });
       setEditing(false);
+      toast({ title: "Transcripción cargada", description: "La transcripción se cargó correctamente.", variant: "default" });
     } catch (e) {
       setTranscription("");
+      toast({ title: "Error", description: "No se pudo cargar la transcripción.", variant: "destructive" });
     }
   };
 
   const handleSaveTranscription = async () => {
     if (!selectedAudio) return;
+    setConfirmAction({ type: 'save', filename: selectedAudio.filename });
+  };
+
+  const confirmSaveTranscription = async () => {
+    if (!selectedAudio) return;
     setSaving(true);
     try {
       await saveTranscription(selectedAudio.filename, transcription);
       setEditing(false);
-    } catch (e) {}
+      toast({ title: "Guardado", description: "Los cambios se guardaron correctamente.", variant: "default" });
+    } catch (e) {
+      toast({ title: "Error al guardar", description: "No se pudo guardar la transcripción.", variant: "destructive" });
+    }
     setSaving(false);
+    setConfirmAction(null);
+  };
+
+  const handleDownloadTxt = () => {
+    if (!selectedAudio) return;
+    setConfirmAction({ type: 'download-txt', filename: selectedAudio.filename });
+  };
+
+  const handleDownloadDocx = () => {
+    if (!selectedAudio) return;
+    setConfirmAction({ type: 'download-docx', filename: selectedAudio.filename });
+  };
+
+  const confirmDownload = () => {
+    if (!confirmAction) return;
+    if (confirmAction.type === 'download-txt') {
+      const url = `http://127.0.0.1:8000/transcript/download/${confirmAction.filename}`;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${confirmAction.filename || "transcripcion"}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast({ title: "Descarga TXT", description: "La descarga del archivo TXT ha comenzado.", variant: "default" });
+    } else if (confirmAction.type === 'download-docx') {
+      const url = `http://127.0.0.1:8000/transcript/export_docx/${confirmAction.filename}`;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = confirmAction.filename.replace(/\.[^/.]+$/, "") + ".docx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast({ title: "Descarga DOCX", description: "La descarga del archivo DOCX ha comenzado.", variant: "default" });
+    }
+    setConfirmAction(null);
   };
 
   return (
@@ -245,17 +320,7 @@ export default function SubirAudioPage() {
                           variant="ghost"
                           className="transition-all hover:scale-110"
                           title="Descargar TXT"
-                          onClick={() => {
-                            if (!selectedAudio) return;
-                            const url = `http://127.0.0.1:8000/transcript/download/${selectedAudio.filename}`;
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = `${selectedAudio.filename || "transcripcion"}.txt`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            toast({ title: "Descarga TXT", description: "La descarga del archivo TXT ha comenzado.", variant: "default" });
-                          }}
+                          onClick={handleDownloadTxt}
                         >
                           <FileText className="h-4 w-4" />
                         </Button>
@@ -264,17 +329,7 @@ export default function SubirAudioPage() {
                           variant="ghost"
                           className="transition-all hover:scale-110"
                           title="Descargar DOCX"
-                          onClick={() => {
-                            if (!selectedAudio) return;
-                            const url = `http://127.0.0.1:8000/transcript/export_docx/${selectedAudio.filename}`;
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = selectedAudio.filename.replace(/\.[^/.]+$/, "") + ".docx";
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            toast({ title: "Descarga DOCX", description: "La descarga del archivo DOCX ha comenzado.", variant: "default" });
-                          }}
+                          onClick={handleDownloadDocx}
                         >
                           <FilePlus2 className="h-4 w-4" />
                         </Button>
@@ -319,6 +374,46 @@ export default function SubirAudioPage() {
       </main>
 
       <Footer />
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={open => { if (!open) setConfirmDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Deseas eliminar el audio?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará el audio y su transcripción de forma permanente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteAudio}>Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmAction} onOpenChange={open => { if (!open) setConfirmAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmAction?.type === 'save' && '¿Deseas guardar los cambios?'}
+              {confirmAction?.type === 'download-txt' && '¿Descargar transcripción en TXT?'}
+              {confirmAction?.type === 'download-docx' && '¿Descargar transcripción en DOCX?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.type === 'save' && 'Se guardarán los cambios realizados en la transcripción.'}
+              {confirmAction?.type === 'download-txt' && 'Se descargará la transcripción en formato TXT.'}
+              {confirmAction?.type === 'download-docx' && 'Se descargará la transcripción en formato DOCX.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            {confirmAction?.type === 'save' ? (
+              <AlertDialogAction onClick={confirmSaveTranscription}>Guardar</AlertDialogAction>
+            ) : (
+              <AlertDialogAction onClick={confirmDownload}>Descargar</AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
