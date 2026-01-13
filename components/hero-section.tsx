@@ -21,7 +21,7 @@ export function HeroSection() {
             }`}
           >
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75"></span>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75"></span>
               <span className="relative inline-flex h-2 w-2 rounded-full bg-accent"></span>
             </span>
             <span className="text-muted-foreground">IA de última generación</span>
@@ -33,7 +33,7 @@ export function HeroSection() {
             }`}
           >
             Transcripción profesional{" "}
-            <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent animate-in">
+            <span className="bg-gradient-to-r from-primary to-white bg-clip-text text-transparent animate-in">
               impulsada por IA
             </span>
           </h1>
@@ -43,7 +43,7 @@ export function HeroSection() {
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
             }`}
           >
-            Convierte audio a texto con precisión excepcional. Soporta múltiples idiomas, identificación de hablantes y
+            Convierte audio a texto con presicion, identificación de hablantes y
             edición en tiempo real.
           </p>
 
@@ -55,7 +55,7 @@ export function HeroSection() {
             <a href="/subir-audio">
               <Button
                 size="lg"
-                className="gap-2 transition-all hover:scale-105 hover:shadow-lg hover:shadow-primary/20 group"
+                className="gap-2 transition-all hover:scale-105 hover:shadow-lg hover:shadow-red-500/20 group bg-red-500 text-white"
               >
                 <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 Subir audio
@@ -65,7 +65,7 @@ export function HeroSection() {
               <Button
                 size="lg"
                 variant="outline"
-                className="gap-2 transition-all hover:scale-105 hover:border-primary hover:text-primary bg-transparent group"
+                className="gap-2 transition-all hover:scale-105 hover:border-red-500 hover:text-red-500 bg-transparent group"
               >
                 <Mic className="h-5 w-5 group-hover:scale-110 transition-transform" />
                 Grabar audio
@@ -80,7 +80,7 @@ export function HeroSection() {
           >
             <div className="flex items-center gap-2">
               <div className="h-1 w-1 rounded-full bg-accent animate-pulse"></div>
-              <span>98% precisión</span>
+              <span>90% precisión</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="h-1 w-1 rounded-full bg-accent animate-pulse"></div>

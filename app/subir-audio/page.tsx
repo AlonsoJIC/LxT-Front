@@ -245,7 +245,7 @@ export default function SubirAudioPage() {
               </div>
               {/* Audios subidos */}
               <div className="space-y-4">
-                <div className={`mb-6 transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}> 
+                <div className="mb-6 animate-fade-in-up"> 
                   <h3 className="font-semibold mb-2">Audios</h3>
                   {loadingList ? (
                     <div className="text-muted-foreground">Cargando...</div>

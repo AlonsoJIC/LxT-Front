@@ -1,3 +1,4 @@
+import { AnimatedBackground } from "@/components/animated-background"
 import { Footer } from "@/components/footer"
 import { Card } from "@/components/ui/card"
 import { Shield, Lock, Eye, Server, CheckCircle, AlertTriangle } from "lucide-react"
@@ -5,7 +6,7 @@ import { Shield, Lock, Eye, Server, CheckCircle, AlertTriangle } from "lucide-re
 export default function SeguridadPage() {
   return (
     <div className="min-h-screen bg-background">
-
+      <AnimatedBackground />
       <main className="container mx-auto px-4 py-16">
         <div className="mx-auto max-w-6xl">
           <div className="mb-12 text-center">

@@ -1,3 +1,4 @@
+import { AnimatedBackground } from "@/components/animated-background"
 import { Footer } from "@/components/footer"
 import { Card } from "@/components/ui/card"
 import { Shield, FileText, Eye, Lock } from "lucide-react"
@@ -5,7 +6,7 @@ import { Shield, FileText, Eye, Lock } from "lucide-react"
 export default function PrivacidadTerminosPage() {
   return (
     <div className="min-h-screen bg-background">
-
+      <AnimatedBackground />
       <main className="container mx-auto px-4 py-16">
         <div className="mx-auto max-w-4xl">
           <div className="mb-12 text-center">

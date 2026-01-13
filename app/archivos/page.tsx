@@ -110,7 +110,7 @@ export default function ArchivosPage() {
     <div className="relative min-h-screen animate-fade-in">
       <AnimatedBackground />
       <main className="max-w-6xl mx-auto relative z-10 container mx-auto px-4 py-16 animate-fade-in-up">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-12">
             <div>
               <h1
                 className={`text-4xl md:text-5xl font-bold mb-2 text-balance transition-all duration-700 delay-100 ${
@@ -149,7 +149,7 @@ export default function ArchivosPage() {
               </a>
             </div>
           </div>
-                    <div className="mb-8 animate-fade-in-up flex flex-col md:flex-row md:items-center gap-4">
+          <div className="mb-8 animate-fade-in-up flex flex-col md:flex-row md:items-center gap-4">
             <div className="relative w-full md:w-1/2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
               <Input
@@ -162,8 +162,12 @@ export default function ArchivosPage() {
             </div>
           </div>
 
-        <div className="max-w-6xl mx-auto bg-muted rounded-xl p-4 md:p-8">
-          <div className={`overflow-x-auto transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}> 
+
+
+
+
+        <div className="max-w-6xl mx-auto bg-card hover:shadow-lg hover:shadow-primary/5 rounded-xl p-4 md:p-8">
+                <div className="mb-6 animate-fade-in-up"> 
             {loadingList ? (
               <div className="text-muted-foreground p-8">Cargando...</div>
             ) : (

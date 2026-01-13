@@ -31,10 +31,10 @@ export function AnimatedBackground() {
     }> = []
 
     const colors = [
-      "rgba(147, 51, 234, 0.6)", // purple
-      "rgba(59, 130, 246, 0.6)", // blue
-      "rgba(14, 165, 233, 0.6)", // cyan
-      "rgba(168, 85, 247, 0.6)", // violet
+      "rgba(255, 255, 255, 0.83)", // purple
+      "rgba(240, 28, 28, 0.6)", // blue
+      "rgba(250, 91, 29, 0.6)", // cyan
+      "rgba(250, 202, 69, 0.6)", // violet
     ]
 
     // Create particles

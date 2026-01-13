@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { BookOpen, MessageCircle, Video, FileQuestion, Search, HelpCircle } from "lucide-react"
+import { AnimatedBackground } from "@/components/animated-background"
 
 export default function SoportePage() {
   const faqs = [
@@ -40,6 +41,7 @@ export default function SoportePage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <AnimatedBackground />
       <main className="container mx-auto px-4 py-16">
         <div className="mx-auto max-w-6xl">
           <div className="mb-12 text-center">

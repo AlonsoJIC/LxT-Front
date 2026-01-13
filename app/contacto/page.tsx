@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Mail, MessageSquare, Phone, MapPin } from "lucide-react"
 import { useState } from "react"
+import { AnimatedBackground } from "@/components/animated-background"
 
 export default function ContactoPage() {
   const [formData, setFormData] = useState({
@@ -22,7 +23,10 @@ export default function ContactoPage() {
   }
 
   return (
+    
     <div className="min-h-screen bg-background">
+            <AnimatedBackground />
+
       <main className="container mx-auto px-4 py-16">
         <div className="mx-auto max-w-6xl">
           <div className="mb-12 text-center">
