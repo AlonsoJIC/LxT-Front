@@ -342,7 +342,7 @@ export default function GrabarAudioPage() {
                 </div>
               )}
             </div>
-                          <div className="space-y-4">
+              <div className="space-y-4">
                 <div className={`mb-6 transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}> 
                   <h3 className="font-semibold mb-2">Audios</h3>
                   {loadingList ? (
@@ -457,7 +457,7 @@ export default function GrabarAudioPage() {
                           disabled={saving}
                         />
                       ) : (
-                        <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                        <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line text-left">
                           {transcription || "No hay transcripción disponible."}
                         </p>
                       )}

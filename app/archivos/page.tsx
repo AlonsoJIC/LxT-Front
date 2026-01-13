@@ -5,7 +5,6 @@ import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-// import { Select } from "@/components/ui/select" // Removed, not used
 import { FileAudio, Download, Trash2, Search, Clock, FileText } from "lucide-react"
 import { FaSortUp, FaSortDown } from "react-icons/fa"
 import {
@@ -128,20 +127,26 @@ export default function ArchivosPage() {
                 Gestiona todos tus audios y transcripciones en un solo lugar
               </p>
             </div>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                asChild
-                className="transition-all duration-200 hover:bg-primary/10 hover:border-primary hover:text-primary"
-              >
-                <a href="/subir-audio">Subir audio</a>
-              </Button>
-              <Button
-                asChild
-                className="transition-all duration-200 hover:bg-primary/10 hover:border-primary hover:text-primary"
-              >
-                <a href="/grabar-audio">Grabar nuevo</a>
-              </Button>
+            <div className="flex flex-col items-center justify-center gap-4 sm:flex-row transition-all duration-700 delay-300">
+              <a href="/subir-audio">
+                <Button
+                  size="lg"
+                  className="gap-2 transition-all hover:scale-105 hover:shadow-lg hover:shadow-primary/20 group"
+                >
+                  <FileAudio className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                  Subir audio
+                </Button>
+              </a>
+              <a href="/grabar-audio">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="gap-2 transition-all hover:scale-105 hover:border-primary hover:text-primary bg-transparent group"
+                >
+                  <FileText className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                  Grabar nuevo
+                </Button>
+              </a>
             </div>
           </div>
                     <div className="mb-8 animate-fade-in-up flex flex-col md:flex-row md:items-center gap-4">
@@ -155,10 +160,6 @@ export default function ArchivosPage() {
                 style={{ minHeight: 44 }}
               />
             </div>
-
-
-
-
           </div>
 
         <div className="max-w-6xl mx-auto bg-muted rounded-xl p-4 md:p-8">
@@ -215,7 +216,9 @@ export default function ArchivosPage() {
                     </tbody>
                   </table>
                 )}
+                
               </Card>
+              
             )}
           </div>
 
@@ -331,4 +334,5 @@ export default function ArchivosPage() {
       <Footer />
     </div>
   );
+  
 }

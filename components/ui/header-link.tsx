@@ -5,7 +5,8 @@ export function HeaderLink({ href, children }: { href: string; children: ReactNo
   return (
     <Link
       href={href}
-      className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded px-1"
+      tabIndex={-1}
+      className="focus:outline-none"
     >
       {children}
     </Link>

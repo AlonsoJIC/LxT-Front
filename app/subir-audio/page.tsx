@@ -360,7 +360,7 @@ export default function SubirAudioPage() {
                           disabled={saving}
                         />
                       ) : (
-                        <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                        <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line text-left">
                           {transcription || "No hay transcripción disponible."}
                         </p>
                       )}
