@@ -28,10 +28,17 @@ git clone https://github.com/tuusuario/LxT-Front
 cd lxt-desktop
 ```
 
+
 ### 2. Instalar dependencias frontend
+
+Se recomienda usar **pnpm** (preferido) o npm, pero no ambos para evitar conflictos de lockfiles.
 
 ```bash
 cd LxT-Front
+pnpm install
+```
+o, si prefieres npm:
+```bash
 npm install
 ```
 
@@ -65,6 +72,7 @@ npm run dev
 3. **Edita, elimina o descarga** la transcripción desde la sección correspondiente.
 4. **Gestiona audios** y transcripciones con confirmaciones personalizadas.
 
+
 ## Estructura del Proyecto
 
 ```
@@ -72,6 +80,16 @@ LxT-Desktop/
 ├── LxT-Front/      # Electron + React frontend
 │   ├── components/
 │   ├── lib/
+│   ├── public/
+│   ├── app/
+│   ├── hooks/
+│   ├── styles/
+│   ├── main.js
+│   ├── preload.js
+│   ├── electron-builder.json
+│   ├── electron.package.json
+│   ├── package.json
+│   ├── pnpm-lock.yaml
 │   └── ...
 ├── LxT-Back/       # FastAPI backend
 │   ├── main.py
@@ -79,6 +97,18 @@ LxT-Desktop/
 │   └── ...
 └── README.md
 ```
+
+## Archivos ignorados por git
+
+El proyecto incluye un `.gitignore` robusto que ignora:
+
+- Archivos de dependencias (`node_modules/`, lockfiles alternativos)
+- Archivos temporales y de caché (`.next/`, `.cache/`, `dist/`, `tmp/`, `*.log`, etc.)
+- Archivos de sistema y de IDE (`.DS_Store`, `Thumbs.db`, `.vscode/`, `.idea/`, etc.)
+- Archivos de configuración sensibles (`.env*`)
+- Archivos de build de Electron (`*.exe`, `*.dmg`, `*.asar`, etc.)
+
+**Recomendación:** Mantén solo un lockfile (preferiblemente `pnpm-lock.yaml`) y elimina los demás (`yarn.lock`, `package-lock.json`).
 
 ## Endpoints Backend
 

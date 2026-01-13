@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Mic, Upload, Play, Pause, Download, FileText, FilePlus2, Clipboard } from "lucide-react"
-import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, downloadTranscription, deleteAudio, deleteTranscription, fetchTranscripts } from "@/lib/apiService"
+import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, downloadTranscription, deleteAudio, deleteTranscription, fetchTranscripts, API_BASE } from "@/lib/apiService"
 import {
   Dialog,
   DialogTrigger,
@@ -141,7 +141,7 @@ export function TranscriptionDemo() {
   // Descargar DOCX
   const handleDownloadDocx = () => {
     if (!selectedAudio) return;
-    const url = `http://127.0.0.1:8000/transcript/export_docx/${selectedAudio.filename}`;
+    const url = `${API_BASE}/transcript/export_docx/${selectedAudio.filename}`;
     const a = document.createElement("a");
     a.href = url;
     a.download = selectedAudio.filename.replace(/\.[^/.]+$/, "") + ".docx";

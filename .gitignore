@@ -19,9 +19,53 @@ yarn-error.log*
 # env files
 .env*
 
+# electron
+electron-builder.json
+electron.package.json
+*.asar
+*.exe
+*.dmg
+*.app
+release/
+dist/
+tmp/
+temp/
+
+# OS
+Thumbs.db
+ehthumbs.db
+.DS_Store
+desktop.ini
+
+# IDEs/Editors
+.vscode/
+.idea/
+.history/
+
+# test/coverage
+coverage/
+*.lcov
+
+# cache
+.cache/
+.turbo/
+.parcel-cache/
+.sass-cache/
+
+# lock files (keep only one, prefer pnpm)
+yarn.lock
+package-lock.json
+
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
+
+# misc
+*.log
+*.pid
+*.seed
+*.pid.lock
 next-env.d.ts

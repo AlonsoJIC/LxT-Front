@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Mic, Square, Play, Pause, Trash2, Loader2, FileText, FilePlus2, Clipboard } from "lucide-react"
 import { useState, useRef, useEffect, useCallback } from "react"
-import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription } from "@/lib/apiService"
+import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription, API_BASE } from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
 import {
   AlertDialog,
@@ -124,7 +124,7 @@ export default function GrabarAudioPage() {
       await handleSaveTranscription();
     } else if (confirmAction.type === 'download-txt') {
       if (!selectedAudio) return;
-      const url = `http://127.0.0.1:8000/transcript/download/${selectedAudio.filename}`;
+      const url = `${API_BASE}/transcript/download/${selectedAudio.filename}`;
       const a = document.createElement("a");
       a.href = url;
       a.download = `${selectedAudio.filename || "transcripcion"}.txt`;
@@ -134,7 +134,7 @@ export default function GrabarAudioPage() {
       toast({ title: "Descarga TXT", description: "La descarga del archivo TXT ha comenzado.", variant: "default" });
     } else if (confirmAction.type === 'download-docx') {
       if (!selectedAudio) return;
-      const url = `http://127.0.0.1:8000/transcript/export_docx/${selectedAudio.filename}`;
+      const url = `${API_BASE}/transcript/export_docx/${selectedAudio.filename}`;
       const a = document.createElement("a");
       a.href = url;
       a.download = selectedAudio.filename.replace(/\.[^/.]+$/, "") + ".docx";

@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useToast } from "@/components/ui/use-toast"
-import { fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, downloadTranscription, deleteAudio, deleteTranscription } from "@/lib/apiService"
+import { fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, downloadTranscription, deleteAudio, deleteTranscription, API_BASE } from "@/lib/apiService"
 
 export default function ArchivosPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -84,7 +84,7 @@ export default function ArchivosPage() {
 
   const handleDownloadDocx = () => {
     if (!selectedAudio) return;
-    const url = `http://127.0.0.1:8000/transcript/export_docx/${selectedAudio.filename}`;
+    const url = `${API_BASE}/transcript/export_docx/${selectedAudio.filename}`;
     const a = document.createElement("a");
     a.href = url;
     a.download = selectedAudio.filename.replace(/\.[^/.]+$/, "") + ".docx";
@@ -280,7 +280,7 @@ export default function ArchivosPage() {
                   {confirmAction?.type === "delete-audio" && `Se eliminará el audio \"${confirmAction.filename}\" y su transcripción.`}
                   {confirmAction?.type === "edit" && `Se guardarán los cambios realizados en la transcripción de \"${confirmAction.filename}\".`}
                   {confirmAction?.type === "download" && `Se descargará la transcripción de \"${confirmAction.filename}\".`}
-                </DialogDescription> duraci
+                </DialogDescription>
               </DialogHeader>
               <DialogFooter>
                 <DialogClose asChild>

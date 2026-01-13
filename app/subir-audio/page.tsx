@@ -6,7 +6,7 @@ import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Upload, FileAudio, CheckCircle, Loader2, FileText, FilePlus2, Clipboard } from "lucide-react"
-import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription } from "@/lib/apiService"
+import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription, API_BASE } from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
 import {
   AlertDialog,
@@ -161,7 +161,7 @@ export default function SubirAudioPage() {
   const confirmDownload = () => {
     if (!confirmAction) return;
     if (confirmAction.type === 'download-txt') {
-      const url = `http://127.0.0.1:8000/transcript/download/${confirmAction.filename}`;
+      const url = `${API_BASE}/transcript/download/${confirmAction.filename}`;
       const a = document.createElement("a");
       a.href = url;
       a.download = `${confirmAction.filename || "transcripcion"}.txt`;
@@ -170,7 +170,7 @@ export default function SubirAudioPage() {
       document.body.removeChild(a);
       toast({ title: "Descarga TXT", description: "La descarga del archivo TXT ha comenzado.", variant: "default" });
     } else if (confirmAction.type === 'download-docx') {
-      const url = `http://127.0.0.1:8000/transcript/export_docx/${confirmAction.filename}`;
+      const url = `${API_BASE}/transcript/export_docx/${confirmAction.filename}`;
       const a = document.createElement("a");
       a.href = url;
       a.download = confirmAction.filename.replace(/\.[^/.]+$/, "") + ".docx";
