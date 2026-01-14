@@ -52,6 +52,23 @@ export async function fetchTranscription(filename: string) {
   return json;
 }
 
+export async function generateTranscription(filename: string, minSpeakers?: number, maxSpeakers?: number) {
+  const params = new URLSearchParams();
+  params.append("filename", filename);
+  if (minSpeakers !== undefined) {
+    params.append("min_speakers", minSpeakers.toString());
+  }
+  if (maxSpeakers !== undefined) {
+    params.append("max_speakers", maxSpeakers.toString());
+  }
+
+  const res = await fetch(`${API_BASE}/transcript?${params.toString()}`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Error al generar la transcripción");
+  return res.json();
+}
+
 export async function saveTranscription(filename: string, text: string) {
   const res = await fetch(`${API_BASE}/transcript/${filename}`, {
     method: "PUT",

@@ -5,8 +5,8 @@ import { AnimatedBackground } from "@/components/animated-background"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload, FileAudio, CheckCircle, Loader2, FileText, FilePlus2, Clipboard } from "lucide-react"
-import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription, API_BASE } from "@/lib/apiService"
+import { Upload, FileAudio, CheckCircle, Loader2, FileText, FilePlus2, Clipboard, Settings2 } from "lucide-react"
+import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription, API_BASE, generateTranscription } from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
 import {
   AlertDialog,
@@ -34,6 +34,16 @@ export default function SubirAudioPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [isVisible, setIsVisible] = useState(false);
+  
+  // Estados para parámetros de speakers
+  const [useCustomSpeakers, setUseCustomSpeakers] = useState(false);
+  const [minSpeakers, setMinSpeakers] = useState<number>(1);
+  const [maxSpeakers, setMaxSpeakers] = useState<number | null>(null);
+
+  // Modal para configuración de hablantes al subir/dropear audio
+  const [showSpeakerModal, setShowSpeakerModal] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  
   useEffect(() => { setIsVisible(true); }, []);
 
   useEffect(() => {
@@ -58,16 +68,10 @@ export default function SubirAudioPage() {
     }
   }, []);
 
-  const handleFileUpload = async (file: File) => {
-    setUploading(true);
-    try {
-      await uploadAudio(file);
-      await fetchAudios();
-    } catch (e) {
-      // Puedes agregar un toast aquí si tienes sistema de notificaciones
-    } finally {
-      setUploading(false);
-    }
+  // Nueva lógica: al subir/dropear, mostrar modal de configuración
+  const handleFileUpload = (file: File) => {
+    setPendingFile(file);
+    setShowSpeakerModal(true);
   };
 
   const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
@@ -87,6 +91,36 @@ export default function SubirAudioPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       handleFileUpload(e.target.files[0]);
+    }
+  };
+  // Confirmar configuración y comenzar transcripción
+  const handleConfirmSpeakerModal = async () => {
+    if (!pendingFile) return;
+    setUploading(true);
+    setShowSpeakerModal(false);
+    try {
+      // Subir audio
+      const uploadRes = await uploadAudio(pendingFile);
+      await fetchAudios();
+      // Generar transcripción
+      const filename = uploadRes.filename || pendingFile.name;
+      const params = useCustomSpeakers ? { minSpeakers, maxSpeakers } : {};
+      await generateTranscription(
+        filename,
+        params.minSpeakers,
+        params.maxSpeakers
+      );
+      // Mostrar transcripción generada
+      const baseName = filename.replace(/\.[^/.]+$/, "");
+      const transcriptName = `${baseName}.txt`;
+      setSelectedAudio({ filename: transcriptName, audioFilename: filename });
+      await fetchTranscriptionLocal(transcriptName);
+      toast({ title: "Transcripción generada", description: "La transcripción se generó correctamente.", variant: "default" });
+    } catch (e) {
+      toast({ title: "Error", description: "No se pudo generar la transcripción.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      setPendingFile(null);
     }
   };
 
@@ -126,6 +160,29 @@ export default function SubirAudioPage() {
     } catch (e) {
       setTranscription("");
       toast({ title: "Error", description: "No se pudo cargar la transcripción.", variant: "destructive" });
+    }
+  };
+
+  const handleGenerateTranscription = async (filename: string) => {
+    setUploading(true);
+    try {
+      const baseName = filename.replace(/\.[^/.]+$/, "");
+      const transcriptName = `${baseName}.txt`;
+      
+      // Generar transcripción con parámetros de speakers si están activos
+      const params = useCustomSpeakers ? { minSpeakers, maxSpeakers } : {};
+      await generateTranscription(
+        filename,
+        params.minSpeakers,
+        params.maxSpeakers
+      );
+      
+      // Cargar la transcripción generada
+      await fetchTranscriptionLocal(transcriptName);
+    } catch (e) {
+      toast({ title: "Error", description: "No se pudo generar la transcripción.", variant: "destructive" });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -184,6 +241,60 @@ export default function SubirAudioPage() {
 
   return (
     <div className="relative min-h-screen">
+      {/* Modal de configuración de hablantes al subir/dropear audio */}
+      <AlertDialog open={showSpeakerModal} onOpenChange={open => { if (!open) setShowSpeakerModal(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Sabes cuántas personas hablan en el audio?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Puedes especificar el rango de hablantes para mejorar la detección de voces. Si no lo sabes, deja en automático.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-4 mt-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={useCustomSpeakers}
+                onChange={e => setUseCustomSpeakers(e.target.checked)}
+                id="modal-speaker-toggle"
+                className="w-4 h-4 cursor-pointer"
+              />
+              <label htmlFor="modal-speaker-toggle" className="font-medium cursor-pointer">Quiero especificar el rango de hablantes</label>
+            </div>
+            {useCustomSpeakers && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium block mb-1">Mínimo de hablantes</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={minSpeakers}
+                    onChange={e => setMinSpeakers(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full px-2 py-1 rounded border"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-1">Máximo de hablantes (opcional)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={maxSpeakers || ""}
+                    onChange={e => setMaxSpeakers(e.target.value ? parseInt(e.target.value) : null)}
+                    placeholder="Automático"
+                    className="w-full px-2 py-1 rounded border"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setShowSpeakerModal(false); setPendingFile(null); }}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSpeakerModal} disabled={uploading}>
+              {uploading ? "Procesando..." : "Confirmar y transcribir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AnimatedBackground />
       <main className="relative z-10 container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto text-center">
@@ -245,6 +356,7 @@ export default function SubirAudioPage() {
               </div>
               {/* Audios subidos */}
               <div className="space-y-4">
+
                 <div className="mb-6 animate-fade-in-up"> 
                   <h3 className="font-semibold mb-2">Audios</h3>
                   {loadingList ? (
@@ -277,7 +389,7 @@ export default function SubirAudioPage() {
                                     // Remove audio extension for transcript filename
                                     const baseName = (audio.name || audio.filename).replace(/\.[^/.]+$/, "");
                                     const transcriptName = `${baseName}.txt`;
-                                    setSelectedAudio({ filename: transcriptName });
+                                    setSelectedAudio({ filename: transcriptName, audioFilename: audio.filename || audio.name });
                                     setEditing(false);
                                     fetchTranscriptionLocal(transcriptName);
                                   }}
@@ -301,58 +413,91 @@ export default function SubirAudioPage() {
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-semibold">Transcripción de: {selectedAudio.filename || selectedAudio.name}</h3>
                       <div className="flex items-center gap-2">
-                        {!editing ? (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 transition-all shadow-md border-blue-700 border"
-                            onClick={() => setEditing(true)}
-                          >
-                            Editar
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="default" onClick={handleSaveTranscription} disabled={saving}>
-                            {saving ? "Guardando..." : "Guardar"}
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="transition-all hover:scale-110"
-                          title="Descargar TXT"
-                          onClick={handleDownloadTxt}
-                        >
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="transition-all hover:scale-110"
-                          title="Descargar DOCX"
-                          onClick={handleDownloadDocx}
-                        >
-                          <FilePlus2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="transition-all hover:scale-110"
-                          title="Copiar al portapapeles"
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(transcription);
-                              toast({ title: "Copiado", description: "La transcripción se copió al portapapeles.", variant: "default" });
-                            } catch {
-                              toast({ title: "Error", description: "No se pudo copiar al portapapeles.", variant: "destructive" });
-                            }
-                          }}
-                        >
-                          <Clipboard className="h-4 w-4" />
-                        </Button>
+                        {transcription ? (
+                          <>
+                            {!editing ? (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 transition-all shadow-md border-blue-700 border"
+                                onClick={() => setEditing(true)}
+                              >
+                                Editar
+                              </Button>
+                            ) : (
+                              <Button size="sm" variant="default" onClick={handleSaveTranscription} disabled={saving}>
+                                {saving ? "Guardando..." : "Guardar"}
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="transition-all hover:scale-110"
+                              title="Descargar TXT"
+                              onClick={handleDownloadTxt}
+                            >
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="transition-all hover:scale-110"
+                              title="Descargar DOCX"
+                              onClick={handleDownloadDocx}
+                            >
+                              <FilePlus2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="transition-all hover:scale-110"
+                              title="Copiar al portapapeles"
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(transcription);
+                                  toast({ title: "Copiado", description: "La transcripción se copió al portapapeles.", variant: "default" });
+                                } catch {
+                                  toast({ title: "Error", description: "No se pudo copiar al portapapeles.", variant: "destructive" });
+                                }
+                              }}
+                            >
+                              <Clipboard className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                     <div className="min-h-[200px] rounded-lg bg-muted/50 p-4 transition-all hover:bg-muted/70">
-                      {editing ? (
+                      {!transcription ? (
+                        <div className="flex flex-col items-center justify-center h-[200px] gap-4">
+                          <p className="text-muted-foreground text-center">
+                            No hay transcripción disponible. Haz clic en el botón para generarla.
+                          </p>
+                          <Button
+                            size="lg"
+                            variant="default"
+                            className="font-bold bg-green-600 text-white hover:bg-green-700"
+                            onClick={() => {
+                              if (selectedAudio.audioFilename) {
+                                handleGenerateTranscription(selectedAudio.audioFilename);
+                              }
+                            }}
+                            disabled={uploading}
+                          >
+                            {uploading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Generando...
+                              </>
+                            ) : (
+                              <>
+                                <FileAudio className="h-4 w-4 mr-2" />
+                                Generar Transcripción
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      ) : editing ? (
                         <textarea
                           className="w-full h-40 p-2 rounded border"
                           value={transcription}
@@ -361,7 +506,7 @@ export default function SubirAudioPage() {
                         />
                       ) : (
                         <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line text-left">
-                          {transcription || "No hay transcripción disponible."}
+                          {transcription}
                         </p>
                       )}
                     </div>
