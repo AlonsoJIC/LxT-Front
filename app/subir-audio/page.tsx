@@ -5,9 +5,26 @@ import { AnimatedBackground } from "@/components/animated-background"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload, FileAudio, CheckCircle, Loader2, FileText, FilePlus2, Clipboard, Settings2 } from "lucide-react"
-import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription, API_BASE, generateTranscription } from "@/lib/apiService"
+import { Upload, FileAudio, CheckCircle, Loader2, FileText, FilePlus2, Clipboard, Settings2, Download } from "lucide-react"
+import { 
+  uploadAudio, 
+  fetchAudios as fetchAudiosApi, 
+  fetchTranscription, 
+  saveTranscription, 
+  deleteAudio, 
+  deleteTranscription, 
+  API_BASE, 
+  enqueueTranscription,
+  pollTranscriptionStatus,
+  downloadTranscriptionDocx,
+  TranscriptionTask,
+  WhisperModel,
+  getQueueInfo,
+  QueueInfo
+} from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
+import { ModelSelector } from "@/components/model-selector"
+import { TranscriptionProgressModal } from "@/components/transcription-progress-modal"
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -35,7 +52,8 @@ export default function SubirAudioPage() {
   const { toast } = useToast();
   const [isVisible, setIsVisible] = useState(false);
   
-  // Estados para parámetros de speakers
+  // Estados para modelo y speakers
+  const [selectedModel, setSelectedModel] = useState<WhisperModel>("small");
   const [useCustomSpeakers, setUseCustomSpeakers] = useState(false);
   const [minSpeakers, setMinSpeakers] = useState<number>(1);
   const [maxSpeakers, setMaxSpeakers] = useState<number | null>(null);
@@ -43,11 +61,29 @@ export default function SubirAudioPage() {
   // Modal para configuración de hablantes al subir/dropear audio
   const [showSpeakerModal, setShowSpeakerModal] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  // Estado para el polling de transcripciones
+  const [currentTask, setCurrentTask] = useState<TranscriptionTask | null>(null);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const stopPollingRef = useRef<(() => void) | null>(null);
+
+  // Estado de cola
+  const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
   
   useEffect(() => { setIsVisible(true); }, []);
 
   useEffect(() => {
     fetchAudios();
+    // Actualizar info de cola cada 3 segundos
+    const queueInterval = setInterval(async () => {
+      try {
+        const info = await getQueueInfo();
+        setQueueInfo(info);
+      } catch (e) {
+        console.error("Error al obtener info de la cola:", e);
+      }
+    }, 3000);
+    return () => clearInterval(queueInterval);
   }, []);
 
   const fetchAudios = useCallback(async () => {
@@ -68,7 +104,6 @@ export default function SubirAudioPage() {
     }
   }, []);
 
-  // Nueva lógica: al subir/dropear, mostrar modal de configuración
   const handleFileUpload = (file: File) => {
     setPendingFile(file);
     setShowSpeakerModal(true);
@@ -80,6 +115,7 @@ export default function SubirAudioPage() {
     if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
     else if (e.type === 'dragleave') setDragActive(false);
   };
+  
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -88,12 +124,13 @@ export default function SubirAudioPage() {
       handleFileUpload(e.dataTransfer.files[0]);
     }
   };
+  
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       handleFileUpload(e.target.files[0]);
     }
   };
-  // Confirmar configuración y comenzar transcripción
+
   const handleConfirmSpeakerModal = async () => {
     if (!pendingFile) return;
     setUploading(true);
@@ -102,22 +139,54 @@ export default function SubirAudioPage() {
       // Subir audio
       const uploadRes = await uploadAudio(pendingFile);
       await fetchAudios();
-      // Generar transcripción
+      
+      // Encolar transcripción con el modelo seleccionado
       const filename = uploadRes.filename || pendingFile.name;
-      const params = useCustomSpeakers ? { minSpeakers, maxSpeakers } : {};
-      await generateTranscription(
+      const taskId = await enqueueTranscription(
         filename,
-        params.minSpeakers,
-        params.maxSpeakers
+        selectedModel,
+        useCustomSpeakers ? minSpeakers : undefined,
+        useCustomSpeakers ? maxSpeakers ?? undefined : undefined
       );
-      // Mostrar transcripción generada
-      const baseName = filename.replace(/\.[^/.]+$/, "");
-      const transcriptName = `${baseName}.txt`;
-      setSelectedAudio({ filename: transcriptName, audioFilename: filename });
-      await fetchTranscriptionLocal(transcriptName);
-      toast({ title: "Transcripción generada", description: "La transcripción se generó correctamente.", variant: "default" });
+      
+      // Iniciar polling
+      const initialTask: TranscriptionTask = {
+        task_id: taskId,
+        status: "pendiente",
+        progress: 0,
+        filename: filename,
+        model: selectedModel
+      };
+      setCurrentTask(initialTask);
+      setShowProgressModal(true);
+      
+      // Detener polling anterior si existe
+      if (stopPollingRef.current) {
+        stopPollingRef.current();
+      }
+      
+      // Iniciar nuevo polling
+      stopPollingRef.current = pollTranscriptionStatus(taskId, (status) => {
+        setCurrentTask(status);
+        
+        // Cuando se complete, cargar la transcripción
+        if (status.status === "completada") {
+          setTimeout(async () => {
+            try {
+              const baseName = filename.replace(/\.[^/.]+$/, "");
+              const transcriptName = `${baseName}.txt`;
+              await fetchTranscriptionLocal(transcriptName);
+              setShowProgressModal(false);
+              toast({ title: "Transcripción generada", description: "La transcripción se generó correctamente.", variant: "default" });
+            } catch (e) {
+              toast({ title: "Error", description: "No se pudo cargar la transcripción.", variant: "destructive" });
+            }
+          }, 1000);
+        }
+      });
     } catch (e) {
-      toast({ title: "Error", description: "No se pudo generar la transcripción.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudo encolar la transcripción.", variant: "destructive" });
+      setShowProgressModal(false);
     } finally {
       setUploading(false);
       setPendingFile(null);
@@ -132,12 +201,10 @@ export default function SubirAudioPage() {
     if (!confirmDelete) return;
     try {
       await deleteAudio(confirmDelete);
-      // Eliminar transcript asociado (nombre base + .txt)
       const transcriptName = confirmDelete.replace(/\.[^/.]+$/, "") + ".txt";
       try {
         await deleteTranscription(transcriptName);
       } catch (e) {
-        // Si no existe el transcript, ignorar el error
         console.warn("No se pudo eliminar el transcript asociado:", transcriptName);
       }
       await fetchAudios();
@@ -160,29 +227,6 @@ export default function SubirAudioPage() {
     } catch (e) {
       setTranscription("");
       toast({ title: "Error", description: "No se pudo cargar la transcripción.", variant: "destructive" });
-    }
-  };
-
-  const handleGenerateTranscription = async (filename: string) => {
-    setUploading(true);
-    try {
-      const baseName = filename.replace(/\.[^/.]+$/, "");
-      const transcriptName = `${baseName}.txt`;
-      
-      // Generar transcripción con parámetros de speakers si están activos
-      const params = useCustomSpeakers ? { minSpeakers, maxSpeakers } : {};
-      await generateTranscription(
-        filename,
-        params.minSpeakers,
-        params.maxSpeakers
-      );
-      
-      // Cargar la transcripción generada
-      await fetchTranscriptionLocal(transcriptName);
-    } catch (e) {
-      toast({ title: "Error", description: "No se pudo generar la transcripción.", variant: "destructive" });
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -227,21 +271,36 @@ export default function SubirAudioPage() {
       document.body.removeChild(a);
       toast({ title: "Descarga TXT", description: "La descarga del archivo TXT ha comenzado.", variant: "default" });
     } else if (confirmAction.type === 'download-docx') {
-      const url = `${API_BASE}/transcript/export_docx/${confirmAction.filename}`;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = confirmAction.filename.replace(/\.[^/.]+$/, "") + ".docx";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      downloadTranscriptionDocx(confirmAction.filename);
       toast({ title: "Descarga DOCX", description: "La descarga del archivo DOCX ha comenzado.", variant: "default" });
     }
     setConfirmAction(null);
   };
 
+  // Limpiar polling al desmontar
+  useEffect(() => {
+    return () => {
+      if (stopPollingRef.current) {
+        stopPollingRef.current();
+      }
+    };
+  }, []);
+
   return (
     <div className="relative min-h-screen">
-      {/* Modal de configuración de hablantes al subir/dropear audio */}
+      {/* Modal de progreso de transcripción */}
+      <TranscriptionProgressModal 
+        open={showProgressModal} 
+        task={currentTask}
+        onClose={() => {
+          setShowProgressModal(false);
+          if (stopPollingRef.current) {
+            stopPollingRef.current();
+          }
+        }}
+      />
+
+      {/* Modal de configuración de hablantes */}
       <AlertDialog open={showSpeakerModal} onOpenChange={open => { if (!open) setShowSpeakerModal(false); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -295,6 +354,7 @@ export default function SubirAudioPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
       <AnimatedBackground />
       <main className="relative z-10 container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto text-center">
@@ -313,9 +373,31 @@ export default function SubirAudioPage() {
             Sube tus archivos de audio para transcribirlos automáticamente con IA de última generación
           </p>
 
-          {/* Drag and drop reemplazado por el componente y lógica de subida de audio de transcription-demo */}
           <Card className="border-border/50 transition-all hover:shadow-xl hover:shadow-primary/5">
             <CardContent className="p-8">
+              {/* Estado de la cola */}
+              {queueInfo && (queueInfo.queue_size > 0 || queueInfo.total_processed > 0) && (
+                <div className="mb-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+                  <div className="flex flex-col gap-2 text-sm">
+                    {queueInfo.current_task && queueInfo.current_task.status === "procesando" && (
+                      <p className="font-medium text-blue-700 dark:text-blue-300">
+                        🔄 PROCESANDO: {queueInfo.current_task.filename} ({queueInfo.current_task.model}) {queueInfo.current_task.progress}%
+                      </p>
+                    )}
+                    {queueInfo.queue_size > 0 && (
+                      <p className="text-blue-600 dark:text-blue-400">
+                        ⏳ EN COLA: {queueInfo.queue_size} {queueInfo.queue_size === 1 ? "archivo" : "archivos"} en espera
+                      </p>
+                    )}
+                    {queueInfo.total_processed > 0 && (
+                      <p className="text-green-600 dark:text-green-400">
+                        ✓ COMPLETADAS: {queueInfo.total_processed} transcripción{queueInfo.total_processed !== 1 ? "es" : ""}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div
                 className={`mb-8 flex flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed border-border/50 bg-muted/30 py-16 sm:flex-row transition-all hover:border-primary/30 hover:bg-muted/50 relative transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'} ${dragActive ? 'border-primary bg-primary/10' : ''}`}
                 onDragEnter={handleDrag}
@@ -349,14 +431,25 @@ export default function SubirAudioPage() {
                 {uploading && (
                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60">
                     <div className="text-white text-1xl font-bold animate-pulse p-8 rounded-xl shadow-xl bg-primary/80">
-                      El audio se está transcribiendo, esto puede tardar varios minutos dependiendo el audio,<br />por favor no cierre la aplicación
+                      El audio se está subiendo...<br />por favor espera
                     </div>
                   </div>
                 )}
               </div>
+
+              {/* Selector de modelo */}
+              {!uploading && (
+                <div className="mb-6 p-4 rounded-lg bg-muted/50">
+                  <ModelSelector 
+                    value={selectedModel} 
+                    onChange={setSelectedModel}
+                    disabled={uploading}
+                  />
+                </div>
+              )}
+
               {/* Audios subidos */}
               <div className="space-y-4">
-
                 <div className="mb-6 animate-fade-in-up"> 
                   <h3 className="font-semibold mb-2">Audios</h3>
                   {loadingList ? (
@@ -386,7 +479,6 @@ export default function SubirAudioPage() {
                                   variant="default"
                                   className="font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 transition-all shadow-md border-blue-700 border"
                                   onClick={() => {
-                                    // Remove audio extension for transcript filename
                                     const baseName = (audio.name || audio.filename).replace(/\.[^/.]+$/, "");
                                     const transcriptName = `${baseName}.txt`;
                                     setSelectedAudio({ filename: transcriptName, audioFilename: audio.filename || audio.name });
@@ -407,6 +499,7 @@ export default function SubirAudioPage() {
                     </div>
                   )}
                 </div>
+
                 {/* Transcripción seleccionada */}
                 {selectedAudio && (
                   <div className="mt-8">
@@ -445,7 +538,7 @@ export default function SubirAudioPage() {
                               title="Descargar DOCX"
                               onClick={handleDownloadDocx}
                             >
-                              <FilePlus2 className="h-4 w-4" />
+                              <Download className="h-4 w-4" />
                             </Button>
                             <Button
                               size="sm"
@@ -471,31 +564,8 @@ export default function SubirAudioPage() {
                       {!transcription ? (
                         <div className="flex flex-col items-center justify-center h-[200px] gap-4">
                           <p className="text-muted-foreground text-center">
-                            No hay transcripción disponible. Haz clic en el botón para generarla.
+                            No hay transcripción disponible para este audio.
                           </p>
-                          <Button
-                            size="lg"
-                            variant="default"
-                            className="font-bold bg-green-600 text-white hover:bg-green-700"
-                            onClick={() => {
-                              if (selectedAudio.audioFilename) {
-                                handleGenerateTranscription(selectedAudio.audioFilename);
-                              }
-                            }}
-                            disabled={uploading}
-                          >
-                            {uploading ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Generando...
-                              </>
-                            ) : (
-                              <>
-                                <FileAudio className="h-4 w-4 mr-2" />
-                                Generar Transcripción
-                              </>
-                            )}
-                          </Button>
                         </div>
                       ) : editing ? (
                         <textarea

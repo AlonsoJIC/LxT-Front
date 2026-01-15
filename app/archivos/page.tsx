@@ -18,7 +18,19 @@ import {
 } from "@/components/ui/dialog"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useToast } from "@/components/ui/use-toast"
-import { fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, downloadTranscription, deleteAudio, deleteTranscription, API_BASE } from "@/lib/apiService"
+import { 
+  fetchAudios as fetchAudiosApi, 
+  fetchTranscription, 
+  saveTranscription, 
+  downloadTranscription, 
+  deleteAudio, 
+  deleteTranscription, 
+  API_BASE,
+  downloadTranscriptionDocx,
+  getQueueInfo,
+  QueueInfo
+} from "@/lib/apiService"
+import { TranscriptionProgressModal } from "@/components/transcription-progress-modal"
 
 export default function ArchivosPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -28,9 +40,13 @@ export default function ArchivosPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingList, setLoadingList] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<null | { type: "delete-audio" | "edit" | "download", filename: string }>(null);
+  const [confirmAction, setConfirmAction] = useState<null | { type: "delete-audio" | "edit" | "download-txt" | "download-docx", filename: string }>(null);
   const { toast } = useToast();
   const [isVisible, setIsVisible] = useState(false);
+  
+  // Estado de cola
+  const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
+  
   useEffect(() => { setIsVisible(true); }, []);
 
   const fetchAudios = useCallback(async () => {
@@ -54,6 +70,16 @@ export default function ArchivosPage() {
 
   useEffect(() => {
     fetchAudios();
+    // Actualizar info de cola cada 3 segundos
+    const queueInterval = setInterval(async () => {
+      try {
+        const info = await getQueueInfo();
+        setQueueInfo(info);
+      } catch (e) {
+        console.error("Error al obtener info de la cola:", e);
+      }
+    }, 3000);
+    return () => clearInterval(queueInterval);
   }, [fetchAudios]);
 
   let filteredAudios = audios.filter((audio) => (audio.filename || audio.name || "").toLowerCase().includes(searchQuery.toLowerCase()));
@@ -78,19 +104,12 @@ export default function ArchivosPage() {
 
   const handleDownloadTranscription = () => {
     if (!selectedAudio) return;
-    setConfirmAction({ type: "download", filename: selectedAudio.filename });
+    setConfirmAction({ type: "download-txt", filename: selectedAudio.filename });
   };
 
   const handleDownloadDocx = () => {
     if (!selectedAudio) return;
-    const url = `${API_BASE}/transcript/export_docx/${selectedAudio.filename}`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = selectedAudio.filename.replace(/\.[^/.]+$/, "") + ".docx";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    toast({ title: "Exportación DOCX", description: "La descarga del archivo DOCX ha comenzado.", variant: "default" });
+    setConfirmAction({ type: "download-docx", filename: selectedAudio.filename });
   };
 
   const handleCopyToClipboard = async () => {
@@ -161,6 +180,29 @@ export default function ArchivosPage() {
               />
             </div>
           </div>
+
+        {/* Estado de la cola */}
+        {queueInfo && (queueInfo.queue_size > 0 || queueInfo.total_processed > 0) && (
+          <div className="mb-8 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+            <div className="flex flex-col gap-2 text-sm">
+              {queueInfo.current_task && queueInfo.current_task.status === "procesando" && (
+                <p className="font-medium text-blue-700 dark:text-blue-300">
+                  🔄 PROCESANDO: {queueInfo.current_task.filename} ({queueInfo.current_task.model}) {queueInfo.current_task.progress}%
+                </p>
+              )}
+              {queueInfo.queue_size > 0 && (
+                <p className="text-blue-600 dark:text-blue-400">
+                  ⏳ EN COLA: {queueInfo.queue_size} {queueInfo.queue_size === 1 ? "archivo" : "archivos"} en espera
+                </p>
+              )}
+              {queueInfo.total_processed > 0 && (
+                <p className="text-green-600 dark:text-green-400">
+                  ✓ COMPLETADAS: {queueInfo.total_processed} transcripción{queueInfo.total_processed !== 1 ? "es" : ""}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
 
 
@@ -324,11 +366,22 @@ export default function ArchivosPage() {
                       setSaving(false);
                     }
                   }
-                  if (confirmAction.type === "download") {
-                    downloadTranscription(confirmAction.filename);
+                  if (confirmAction.type === "download-txt") {
+                    const url = `${API_BASE}/transcript/download/${confirmAction.filename}`;
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${confirmAction.filename || "transcripcion"}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    toast({ title: "Descarga TXT", description: "La descarga del archivo TXT ha comenzado.", variant: "default" });
+                  }
+                  if (confirmAction.type === "download-docx") {
+                    downloadTranscriptionDocx(confirmAction.filename);
+                    toast({ title: "Descarga DOCX", description: "La descarga del archivo DOCX ha comenzado.", variant: "default" });
                   }
                   setConfirmAction(null);
-                }}>{confirmAction?.type === "download" ? "Descargar" : "Confirmar"}</Button>
+                }}>{confirmAction?.type === "download-txt" || confirmAction?.type === "download-docx" ? "Descargar" : "Confirmar"}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

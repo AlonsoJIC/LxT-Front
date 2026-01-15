@@ -112,6 +112,7 @@ El proyecto incluye un `.gitignore` robusto que ignora:
 
 ## Endpoints Backend
 
+### ✅ Endpoints Existentes
 - `POST /audio/upload` - Subir audio
 - `GET /audio/list` - Listar audios
 - `DELETE /audio/{filename}` - Eliminar audio
@@ -120,7 +121,48 @@ El proyecto incluye un `.gitignore` robusto que ignora:
 - `PUT /transcript/{filename}` - Editar transcripción
 - `DELETE /transcript/{filename}` - Eliminar transcripción
 - `GET /transcript/list` - Listar transcripciones
-- `GET /transcript/download/{filename}` - Descargar transcripción
+- `GET /transcript/download/{filename}` - Descargar transcripción TXT
+
+### ⚠️ Endpoints Nuevos Requeridos (v2.0)
+Para la nueva funcionalidad de cola y múltiples modelos:
+- `POST /transcript/queue` - Encolar transcripción
+- `GET /transcript/status/{task_id}` - Estado de transcripción
+- `GET /transcript/queue/info` - Información de la cola
+- `POST /transcript/download-docx` - Descargar en DOCX
+
+**Importante:** Lee [ESPECIFICACION_ENDPOINTS.md](./ESPECIFICACION_ENDPOINTS.md) para detalles exactos de cómo implementarlos.
+
+## 📚 Documentación (v2.0)
+
+### Implementación Completa
+- **[IMPLEMENTACION_COMPLETA.md](./IMPLEMENTACION_COMPLETA.md)** - Resumen ejecutivo
+- **[CAMBIOS_TRANSCRIPCION.md](./CAMBIOS_TRANSCRIPCION.md)** - Detalle técnico profundo
+- **[RESUMEN_VISUAL.md](./RESUMEN_VISUAL.md)** - Diagramas y flujos visuales
+
+### Para Desarrollo
+- **[ESPECIFICACION_ENDPOINTS.md](./ESPECIFICACION_ENDPOINTS.md)** - ⚠️ **LEER PRIMERO** - Endpoints que debe implementar el backend
+- **[REFERENCIA_RAPIDA.md](./REFERENCIA_RAPIDA.md)** - API reference con ejemplos
+
+### Para Testing
+- **[GUIA_PRUEBAS.md](./GUIA_PRUEBAS.md)** - Plan de 10 pruebas completo
+- **[MODO_OFFLINE.md](./MODO_OFFLINE.md)** - Cómo testear sin backend (mock server)
+
+---
+
+## ⚠️ IMPORTANTE: Estado del Backend
+
+**El frontend v2.0 está completo y funcional, pero requiere endpoints backend implementados.**
+
+| Endpoint | Status | Documento |
+|----------|--------|-----------|
+| POST /transcript/queue | ❌ NO IMPLEMENTADO | [Ver spec](./ESPECIFICACION_ENDPOINTS.md#1-post-transcriptqueue) |
+| GET /transcript/status/{id} | ❌ NO IMPLEMENTADO | [Ver spec](./ESPECIFICACION_ENDPOINTS.md#2-get-transcriptstatustask_id) |
+| GET /transcript/queue/info | ❌ NO IMPLEMENTADO | [Ver spec](./ESPECIFICACION_ENDPOINTS.md#3-get-transcriptqueueinfo) |
+| GET /transcript/download/* | ✅ Existente | Mantener como está |
+
+**Próximo paso:** [Leer ESPECIFICACION_ENDPOINTS.md](./ESPECIFICACION_ENDPOINTS.md) para implementar los endpoints faltantes.
+
+---
 
 ## Personalización
 

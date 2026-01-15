@@ -4,10 +4,27 @@ import { AnimatedBackground } from "@/components/animated-background"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Mic, Square, Play, Pause, Trash2, Loader2, FileText, FilePlus2, Clipboard } from "lucide-react"
+import { Mic, Square, Play, Pause, Trash2, Loader2, FileText, Download, Clipboard } from "lucide-react"
 import { useState, useRef, useEffect, useCallback } from "react"
-import { uploadAudio, fetchAudios as fetchAudiosApi, fetchTranscription, saveTranscription, deleteAudio, deleteTranscription, API_BASE } from "@/lib/apiService"
+import { 
+  uploadAudio, 
+  fetchAudios as fetchAudiosApi, 
+  fetchTranscription, 
+  saveTranscription, 
+  deleteAudio, 
+  deleteTranscription, 
+  API_BASE,
+  enqueueTranscription,
+  pollTranscriptionStatus,
+  downloadTranscriptionDocx,
+  TranscriptionTask,
+  WhisperModel,
+  getQueueInfo,
+  QueueInfo
+} from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
+import { ModelSelector } from "@/components/model-selector"
+import { TranscriptionProgressModal } from "@/components/transcription-progress-modal"
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -31,9 +48,24 @@ export default function GrabarAudioPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const [isVisible, setIsVisible] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string|null>(null);
-  // Confirm actions for save/download
   const [confirmAction, setConfirmAction] = useState<null | { type: 'save' | 'download-txt' | 'download-docx'; payload?: any }>(null);
+  
+  // Estados para modelo y speakers
+  const [selectedModel, setSelectedModel] = useState<WhisperModel>("small");
+  const [useCustomSpeakers, setUseCustomSpeakers] = useState(false);
+  const [minSpeakers, setMinSpeakers] = useState<number>(1);
+  const [maxSpeakers, setMaxSpeakers] = useState<number | null>(null);
+  
+  // Estado para el polling de transcripciones
+  const [currentTask, setCurrentTask] = useState<TranscriptionTask | null>(null);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const stopPollingRef = useRef<(() => void) | null>(null);
+  
+  // Estado de cola
+  const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
+  
   useEffect(() => { setIsVisible(true); }, []);
+  
   // Estados y lógica de audios subidos y transcripción
   const [audios, setAudios] = useState<any[]>([]);
   const [loadingList, setLoadingList] = useState(false);
@@ -45,6 +77,16 @@ export default function GrabarAudioPage() {
 
   useEffect(() => {
     fetchAudios();
+    // Actualizar info de cola cada 3 segundos
+    const queueInterval = setInterval(async () => {
+      try {
+        const info = await getQueueInfo();
+        setQueueInfo(info);
+      } catch (e) {
+        console.error("Error al obtener info de la cola:", e);
+      }
+    }, 3000);
+    return () => clearInterval(queueInterval);
   }, []);
 
   const fetchAudios = useCallback(async () => {
@@ -228,22 +270,62 @@ export default function GrabarAudioPage() {
       const blob = await response.blob();
       // Crear un archivo con nombre y tipo adecuado
       const file = new File([blob], `grabacion_${Date.now()}.webm`, { type: blob.type });
-      await uploadAudio(file);
-      toast({ title: "Audio subido", description: "El audio grabado se subió correctamente.", variant: "default" });
+      const uploadRes = await uploadAudio(file);
+      
+      // Encolar transcripción con el modelo seleccionado
+      const filename = uploadRes.filename || file.name;
+      const taskId = await enqueueTranscription(
+        filename,
+        selectedModel,
+        useCustomSpeakers ? minSpeakers : undefined,
+        useCustomSpeakers ? maxSpeakers ?? undefined : undefined
+      );
+      
+      // Iniciar polling
+      const initialTask: TranscriptionTask = {
+        task_id: taskId,
+        status: "pendiente",
+        progress: 0,
+        filename: filename,
+        model: selectedModel
+      };
+      setCurrentTask(initialTask);
+      setShowProgressModal(true);
+      
+      // Detener polling anterior si existe
+      if (stopPollingRef.current) {
+        stopPollingRef.current();
+      }
+      
+      // Iniciar nuevo polling
+      stopPollingRef.current = pollTranscriptionStatus(taskId, (status) => {
+        setCurrentTask(status);
+        
+        // Cuando se complete, cargar la transcripción
+        if (status.status === "completada") {
+          setTimeout(async () => {
+            try {
+              const baseName = filename.replace(/\.[^/.]+$/, "");
+              const transcriptName = `${baseName}.txt`;
+              await fetchTranscriptionLocal(transcriptName);
+              setShowProgressModal(false);
+              toast({ title: "Transcripción generada", description: "La transcripción se generó correctamente.", variant: "default" });
+            } catch (e) {
+              toast({ title: "Error", description: "No se pudo cargar la transcripción.", variant: "destructive" });
+            }
+          }, 1000);
+        }
+      });
+      
       setAudioUrl(null);
       setRecordingTime(0);
       await fetchAudios();
     } catch (e) {
-      toast({ title: "Error", description: "No se pudo subir el audio grabado.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudo procesar el audio grabado.", variant: "destructive" });
+      setShowProgressModal(false);
     } finally {
       setIsProcessing(false);
     }
-  }
-
-  const transcribeAudio = async () => {
-    setIsProcessing(true)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsProcessing(false)
   }
 
   const formatTime = (seconds: number) => {
@@ -252,8 +334,28 @@ export default function GrabarAudioPage() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
   }
 
+  // Limpiar polling al desmontar
+  useEffect(() => {
+    return () => {
+      if (stopPollingRef.current) {
+        stopPollingRef.current();
+      }
+    };
+  }, []);
+
   return (
     <div className="relative min-h-screen animate-fade-in">
+      {/* Modal de progreso de transcripción */}
+      <TranscriptionProgressModal 
+        open={showProgressModal} 
+        task={currentTask}
+        onClose={() => {
+          setShowProgressModal(false);
+          if (stopPollingRef.current) {
+            stopPollingRef.current();
+          }
+        }}
+      />
       <AnimatedBackground />
       <main className="relative z-10 container mx-auto px-4 py-16 animate-fade-in-up">
         <div className="max-w-4xl mx-auto text-center">
@@ -332,17 +434,51 @@ export default function GrabarAudioPage() {
                       {isProcessing ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Subiendo...
+                          Procesando...
                         </>
                       ) : (
-                        "Subir audio"
+                        "Subir y transcribir"
                       )}
                     </Button>
                   </div>
                 </div>
               )}
             </div>
-              <div className="space-y-4">
+
+            {/* Selector de modelo */}
+            {audioUrl && !isProcessing && (
+              <div className="mt-8 p-4 rounded-lg bg-muted/50">
+                <ModelSelector 
+                  value={selectedModel} 
+                  onChange={setSelectedModel}
+                  disabled={isProcessing}
+                />
+              </div>
+            )}
+
+            {/* Estado de la cola */}
+            {queueInfo && (queueInfo.queue_size > 0 || queueInfo.total_processed > 0) && (
+              <div className="mt-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+                <div className="flex flex-col gap-2 text-sm">
+                  {queueInfo.current_task && queueInfo.current_task.status === "procesando" && (
+                    <p className="font-medium text-blue-700 dark:text-blue-300">
+                      🔄 PROCESANDO: {queueInfo.current_task.filename} ({queueInfo.current_task.model}) {queueInfo.current_task.progress}%
+                    </p>
+                  )}
+                  {queueInfo.queue_size > 0 && (
+                    <p className="text-blue-600 dark:text-blue-400">
+                      ⏳ EN COLA: {queueInfo.queue_size} {queueInfo.queue_size === 1 ? "archivo" : "archivos"} en espera
+                    </p>
+                  )}
+                  {queueInfo.total_processed > 0 && (
+                    <p className="text-green-600 dark:text-green-400">
+                      ✓ COMPLETADAS: {queueInfo.total_processed} transcripción{queueInfo.total_processed !== 1 ? "es" : ""}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="space-y-4">
                 <div className={`mb-6 transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}> 
                   <h3 className="font-semibold mb-2">Audios</h3>
                   {loadingList ? (
