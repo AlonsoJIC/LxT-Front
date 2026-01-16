@@ -6,7 +6,6 @@ export async function fetchTranscripts() {
 export async function deleteAudio(filename: string) {
   // Usar la ruta y nombre completo con extensión
   const endpoint = `${API_BASE}/audio/${filename}`;
-  console.log("deleteAudio endpoint:", endpoint, "filename param:", filename);
   const res = await fetch(endpoint, {
     method: "DELETE"
   });
@@ -48,7 +47,6 @@ export async function fetchTranscription(filename: string) {
   const res = await fetch(`${API_BASE}/transcript/${filename}`);
   if (!res.ok) throw new Error("Error al obtener la transcripción");
   const json = await res.json();
-  console.log("apiService fetchTranscription response:", json);
   return json;
 }
 
@@ -149,7 +147,12 @@ export async function enqueueTranscription(
  */
 export async function getTranscriptionStatus(taskId: string): Promise<TranscriptionTask> {
   const res = await fetch(`${API_BASE}/transcript/status/${taskId}`);
-  if (!res.ok) throw new Error("Error al obtener el estado de la transcripción");
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error("TASK_NOT_FOUND");
+    }
+    throw new Error("Error al obtener el estado de la transcripción");
+  }
   return res.json();
 }
 

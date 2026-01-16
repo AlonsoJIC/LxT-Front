@@ -26,11 +26,9 @@ import {
   deleteAudio, 
   deleteTranscription, 
   API_BASE,
-  downloadTranscriptionDocx,
-  getQueueInfo,
-  QueueInfo
+  downloadTranscriptionDocx
 } from "@/lib/apiService"
-import { TranscriptionProgressModal } from "@/components/transcription-progress-modal"
+import { useTranscription } from "@/contexts/TranscriptionContext"
 
 export default function ArchivosPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,8 +42,8 @@ export default function ArchivosPage() {
   const { toast } = useToast();
   const [isVisible, setIsVisible] = useState(false);
   
-  // Estado de cola
-  const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
+  // Usar contexto global para filtrar audios en transcripción
+  const { activeTasks } = useTranscription();
   
   useEffect(() => { setIsVisible(true); }, []);
 
@@ -70,19 +68,21 @@ export default function ArchivosPage() {
 
   useEffect(() => {
     fetchAudios();
-    // Actualizar info de cola cada 3 segundos
-    const queueInterval = setInterval(async () => {
-      try {
-        const info = await getQueueInfo();
-        setQueueInfo(info);
-      } catch (e) {
-        console.error("Error al obtener info de la cola:", e);
-      }
-    }, 3000);
-    return () => clearInterval(queueInterval);
   }, [fetchAudios]);
 
-  let filteredAudios = audios.filter((audio) => (audio.filename || audio.name || "").toLowerCase().includes(searchQuery.toLowerCase()));
+  // Filtrar audios que están en transcripción (no mostrarlos hasta que terminen)
+  const audiosInTranscription = Array.from(activeTasks.values())
+    .filter(task => task.status !== 'completada' && task.status !== 'error')
+    .map(task => task.filename);
+
+  let filteredAudios = audios
+    .filter((audio) => {
+      const audioFilename = audio.filename || audio.name || "";
+      // Excluir audios que están en transcripción activa
+      if (audiosInTranscription.includes(audioFilename)) return false;
+      // Filtrar por búsqueda
+      return audioFilename.toLowerCase().includes(searchQuery.toLowerCase());
+    });
 
   const fetchTranscriptionLocal = async (filename: string) => {
     try {
@@ -180,33 +180,6 @@ export default function ArchivosPage() {
               />
             </div>
           </div>
-
-        {/* Estado de la cola */}
-        {queueInfo && (queueInfo.queue_size > 0 || queueInfo.total_processed > 0) && (
-          <div className="mb-8 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
-            <div className="flex flex-col gap-2 text-sm">
-              {queueInfo.current_task && queueInfo.current_task.status === "procesando" && (
-                <p className="font-medium text-blue-700 dark:text-blue-300">
-                  🔄 PROCESANDO: {queueInfo.current_task.filename} ({queueInfo.current_task.model}) {queueInfo.current_task.progress}%
-                </p>
-              )}
-              {queueInfo.queue_size > 0 && (
-                <p className="text-blue-600 dark:text-blue-400">
-                  ⏳ EN COLA: {queueInfo.queue_size} {queueInfo.queue_size === 1 ? "archivo" : "archivos"} en espera
-                </p>
-              )}
-              {queueInfo.total_processed > 0 && (
-                <p className="text-green-600 dark:text-green-400">
-                  ✓ COMPLETADAS: {queueInfo.total_processed} transcripción{queueInfo.total_processed !== 1 ? "es" : ""}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-
-
-
 
         <div className="max-w-6xl mx-auto bg-card hover:shadow-lg hover:shadow-primary/5 rounded-xl p-4 md:p-8">
                 <div className="mb-6 animate-fade-in-up"> 
@@ -323,12 +296,14 @@ export default function ArchivosPage() {
                 <DialogTitle>
                   {confirmAction?.type === "delete-audio" && "¿Eliminar audio?"}
                   {confirmAction?.type === "edit" && "¿Guardar cambios en la transcripción?"}
-                  {confirmAction?.type === "download" && "¿Descargar transcripción?"}
+                  {confirmAction?.type === "download-txt" && "¿Descargar transcripción?"}
+                  {confirmAction?.type === "download-docx" && "¿Descargar transcripción?"}
                 </DialogTitle>
                 <DialogDescription>
                   {confirmAction?.type === "delete-audio" && `Se eliminará el audio \"${confirmAction.filename}\" y su transcripción.`}
                   {confirmAction?.type === "edit" && `Se guardarán los cambios realizados en la transcripción de \"${confirmAction.filename}\".`}
-                  {confirmAction?.type === "download" && `Se descargará la transcripción de \"${confirmAction.filename}\".`}
+                  {confirmAction?.type === "download-txt" && `Se descargará la transcripción de \"${confirmAction.filename}\".`}
+                  {confirmAction?.type === "download-docx" && `Se descargará la transcripción de \"${confirmAction.filename}\".`}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

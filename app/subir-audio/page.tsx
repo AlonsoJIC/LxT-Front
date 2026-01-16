@@ -15,16 +15,13 @@ import {
   deleteTranscription, 
   API_BASE, 
   enqueueTranscription,
-  pollTranscriptionStatus,
   downloadTranscriptionDocx,
   TranscriptionTask,
-  WhisperModel,
-  getQueueInfo,
-  QueueInfo
+  WhisperModel
 } from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
 import { ModelSelector } from "@/components/model-selector"
-import { TranscriptionProgressModal } from "@/components/transcription-progress-modal"
+import { useTranscription } from "@/contexts/TranscriptionContext"
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -50,6 +47,7 @@ export default function SubirAudioPage() {
   const [confirmAction, setConfirmAction] = useState<null | { type: 'save' | 'download-txt' | 'download-docx', filename: string }>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { activeTasks, addTask } = useTranscription();
   const [isVisible, setIsVisible] = useState(false);
   
   // Estados para modelo y speakers
@@ -61,29 +59,11 @@ export default function SubirAudioPage() {
   // Modal para configuración de hablantes al subir/dropear audio
   const [showSpeakerModal, setShowSpeakerModal] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-
-  // Estado para el polling de transcripciones
-  const [currentTask, setCurrentTask] = useState<TranscriptionTask | null>(null);
-  const [showProgressModal, setShowProgressModal] = useState(false);
-  const stopPollingRef = useRef<(() => void) | null>(null);
-
-  // Estado de cola
-  const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
   
   useEffect(() => { setIsVisible(true); }, []);
 
   useEffect(() => {
     fetchAudios();
-    // Actualizar info de cola cada 3 segundos
-    const queueInterval = setInterval(async () => {
-      try {
-        const info = await getQueueInfo();
-        setQueueInfo(info);
-      } catch (e) {
-        console.error("Error al obtener info de la cola:", e);
-      }
-    }, 3000);
-    return () => clearInterval(queueInterval);
   }, []);
 
   const fetchAudios = useCallback(async () => {
@@ -138,7 +118,7 @@ export default function SubirAudioPage() {
     try {
       // Subir audio
       const uploadRes = await uploadAudio(pendingFile);
-      await fetchAudios();
+      // NO actualizar lista de audios aquí - solo cuando termine la transcripción
       
       // Encolar transcripción con el modelo seleccionado
       const filename = uploadRes.filename || pendingFile.name;
@@ -149,44 +129,18 @@ export default function SubirAudioPage() {
         useCustomSpeakers ? maxSpeakers ?? undefined : undefined
       );
       
-      // Iniciar polling
-      const initialTask: TranscriptionTask = {
+      // Agregar a tareas activas usando el contexto global
+      addTask({
         task_id: taskId,
         status: "pendiente",
         progress: 0,
         filename: filename,
         model: selectedModel
-      };
-      setCurrentTask(initialTask);
-      setShowProgressModal(true);
-      
-      // Detener polling anterior si existe
-      if (stopPollingRef.current) {
-        stopPollingRef.current();
-      }
-      
-      // Iniciar nuevo polling
-      stopPollingRef.current = pollTranscriptionStatus(taskId, (status) => {
-        setCurrentTask(status);
-        
-        // Cuando se complete, cargar la transcripción
-        if (status.status === "completada") {
-          setTimeout(async () => {
-            try {
-              const baseName = filename.replace(/\.[^/.]+$/, "");
-              const transcriptName = `${baseName}.txt`;
-              await fetchTranscriptionLocal(transcriptName);
-              setShowProgressModal(false);
-              toast({ title: "Transcripción generada", description: "La transcripción se generó correctamente.", variant: "default" });
-            } catch (e) {
-              toast({ title: "Error", description: "No se pudo cargar la transcripción.", variant: "destructive" });
-            }
-          }, 1000);
-        }
       });
+      
+      toast({ title: "Transcribiendo audio", description: "El audio se está transcribiendo. Aparecerá en la lista cuando termine.", variant: "default" });
     } catch (e) {
       toast({ title: "Error", description: "No se pudo encolar la transcripción.", variant: "destructive" });
-      setShowProgressModal(false);
     } finally {
       setUploading(false);
       setPendingFile(null);
@@ -277,29 +231,10 @@ export default function SubirAudioPage() {
     setConfirmAction(null);
   };
 
-  // Limpiar polling al desmontar
-  useEffect(() => {
-    return () => {
-      if (stopPollingRef.current) {
-        stopPollingRef.current();
-      }
-    };
-  }, []);
+
 
   return (
     <div className="relative min-h-screen">
-      {/* Modal de progreso de transcripción */}
-      <TranscriptionProgressModal 
-        open={showProgressModal} 
-        task={currentTask}
-        onClose={() => {
-          setShowProgressModal(false);
-          if (stopPollingRef.current) {
-            stopPollingRef.current();
-          }
-        }}
-      />
-
       {/* Modal de configuración de hablantes */}
       <AlertDialog open={showSpeakerModal} onOpenChange={open => { if (!open) setShowSpeakerModal(false); }}>
         <AlertDialogContent>
@@ -375,29 +310,6 @@ export default function SubirAudioPage() {
 
           <Card className="border-border/50 transition-all hover:shadow-xl hover:shadow-primary/5">
             <CardContent className="p-8">
-              {/* Estado de la cola */}
-              {queueInfo && (queueInfo.queue_size > 0 || queueInfo.total_processed > 0) && (
-                <div className="mb-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
-                  <div className="flex flex-col gap-2 text-sm">
-                    {queueInfo.current_task && queueInfo.current_task.status === "procesando" && (
-                      <p className="font-medium text-blue-700 dark:text-blue-300">
-                        🔄 PROCESANDO: {queueInfo.current_task.filename} ({queueInfo.current_task.model}) {queueInfo.current_task.progress}%
-                      </p>
-                    )}
-                    {queueInfo.queue_size > 0 && (
-                      <p className="text-blue-600 dark:text-blue-400">
-                        ⏳ EN COLA: {queueInfo.queue_size} {queueInfo.queue_size === 1 ? "archivo" : "archivos"} en espera
-                      </p>
-                    )}
-                    {queueInfo.total_processed > 0 && (
-                      <p className="text-green-600 dark:text-green-400">
-                        ✓ COMPLETADAS: {queueInfo.total_processed} transcripción{queueInfo.total_processed !== 1 ? "es" : ""}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
               <div
                 className={`mb-8 flex flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed border-border/50 bg-muted/30 py-16 sm:flex-row transition-all hover:border-primary/30 hover:bg-muted/50 relative transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'} ${dragActive ? 'border-primary bg-primary/10' : ''}`}
                 onDragEnter={handleDrag}
@@ -437,6 +349,78 @@ export default function SubirAudioPage() {
                 )}
               </div>
 
+              {/* Contenedor de transcripciones activas */}
+              {activeTasks.size > 0 && (
+                <div className="mb-6 space-y-3">
+                  <h3 className="font-semibold text-sm text-muted-foreground">Transcripciones en progreso</h3>
+                  {Array.from(activeTasks.values()).map((task) => {
+                    const isProcessing = task.status === "procesando";
+                    const isCompleted = task.status === "completada";
+                    const isError = task.status === "error";
+                    const isPending = task.status === "pendiente";
+                    
+                    return (
+                      <div
+                        key={task.task_id}
+                        className={`rounded-lg border p-4 transition-all ${
+                          isCompleted ? "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800" :
+                          isError ? "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800" :
+                          isPending ? "bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800" :
+                          "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              {isProcessing && <Loader2 className="h-4 w-4 animate-spin text-blue-600 flex-shrink-0" />}
+                              {isCompleted && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
+                              {isError && <FileAudio className="h-4 w-4 text-red-600 flex-shrink-0" />}
+                              {isPending && <Loader2 className="h-4 w-4 animate-spin text-yellow-600 flex-shrink-0" />}
+                              <p className="font-medium text-sm truncate">{task.filename}</p>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span className="px-2 py-0.5 rounded bg-background/50">
+                                Modelo: {task.model}
+                              </span>
+                              <span className={`font-medium ${
+                                isCompleted ? "text-green-600" :
+                                isError ? "text-red-600" :
+                                isPending ? "text-yellow-600" :
+                                "text-blue-600"
+                              }`}>
+                                {isPending && "⏳ En cola"}
+                                {isProcessing && "🔄 Procesando..."}
+                                {isCompleted && "✓ Completada"}
+                                {isError && "✗ Error"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="text-lg font-bold">{task.progress}%</div>
+                          </div>
+                        </div>
+                        {/* Barra de progreso */}
+                        <div className="mt-3">
+                          <div className="h-2 bg-background/30 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-300 ${
+                                isCompleted ? "bg-green-600" :
+                                isError ? "bg-red-600" :
+                                "bg-blue-600"
+                              }`}
+                              style={{ width: `${task.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                        {isError && task.error && (
+                          <p className="text-xs text-red-600 mt-2">{task.error}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Selector de modelo */}
               {!uploading && (
                 <div className="mb-6 p-4 rounded-lg bg-muted/50">
@@ -454,7 +438,14 @@ export default function SubirAudioPage() {
                   <h3 className="font-semibold mb-2">Audios</h3>
                   {loadingList ? (
                     <div className="text-muted-foreground">Cargando...</div>
-                  ) : audios.length === 0 ? (
+                  ) : audios.filter(audio => {
+                    // Filtrar audios que están en transcripción activa
+                    const audioFilename = audio.filename || audio.name;
+                    const isInTranscription = Array.from(activeTasks.values()).some(
+                      task => task.filename === audioFilename && task.status !== 'completada' && task.status !== 'error'
+                    );
+                    return !isInTranscription;
+                  }).length === 0 ? (
                     <div className="text-muted-foreground">No hay audios subidos.</div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -468,7 +459,14 @@ export default function SubirAudioPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {audios.map((audio, idx) => (
+                          {audios.filter(audio => {
+                            // Filtrar audios que están en transcripción activa
+                            const audioFilename = audio.filename || audio.name;
+                            const isInTranscription = Array.from(activeTasks.values()).some(
+                              task => task.filename === audioFilename && task.status !== 'completada' && task.status !== 'error'
+                            );
+                            return !isInTranscription;
+                          }).map((audio, idx) => (
                             <tr key={audio.id || idx} className="border-b last:border-0">
                               <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.filename || audio.name}</td>
                               <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.created_at || '-'}</td>

@@ -4,7 +4,7 @@ import { AnimatedBackground } from "@/components/animated-background"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Mic, Square, Play, Pause, Trash2, Loader2, FileText, Download, Clipboard } from "lucide-react"
+import { Mic, Square, Play, Pause, Trash2, Loader2, FileText, Download, Clipboard, FilePlus2 } from "lucide-react"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { 
   uploadAudio, 
@@ -15,16 +15,13 @@ import {
   deleteTranscription, 
   API_BASE,
   enqueueTranscription,
-  pollTranscriptionStatus,
   downloadTranscriptionDocx,
   TranscriptionTask,
-  WhisperModel,
-  getQueueInfo,
-  QueueInfo
+  WhisperModel
 } from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
 import { ModelSelector } from "@/components/model-selector"
-import { TranscriptionProgressModal } from "@/components/transcription-progress-modal"
+import { useTranscription } from "@/contexts/TranscriptionContext"
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -56,13 +53,8 @@ export default function GrabarAudioPage() {
   const [minSpeakers, setMinSpeakers] = useState<number>(1);
   const [maxSpeakers, setMaxSpeakers] = useState<number | null>(null);
   
-  // Estado para el polling de transcripciones
-  const [currentTask, setCurrentTask] = useState<TranscriptionTask | null>(null);
-  const [showProgressModal, setShowProgressModal] = useState(false);
-  const stopPollingRef = useRef<(() => void) | null>(null);
-  
-  // Estado de cola
-  const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
+  // Usar contexto global para transcripciones
+  const { addTask, activeTasks } = useTranscription();
   
   useEffect(() => { setIsVisible(true); }, []);
   
@@ -77,16 +69,6 @@ export default function GrabarAudioPage() {
 
   useEffect(() => {
     fetchAudios();
-    // Actualizar info de cola cada 3 segundos
-    const queueInterval = setInterval(async () => {
-      try {
-        const info = await getQueueInfo();
-        setQueueInfo(info);
-      } catch (e) {
-        console.error("Error al obtener info de la cola:", e);
-      }
-    }, 3000);
-    return () => clearInterval(queueInterval);
   }, []);
 
   const fetchAudios = useCallback(async () => {
@@ -281,48 +263,21 @@ export default function GrabarAudioPage() {
         useCustomSpeakers ? maxSpeakers ?? undefined : undefined
       );
       
-      // Iniciar polling
-      const initialTask: TranscriptionTask = {
+      // Agregar a tareas activas usando el contexto global
+      addTask({
         task_id: taskId,
         status: "pendiente",
         progress: 0,
         filename: filename,
         model: selectedModel
-      };
-      setCurrentTask(initialTask);
-      setShowProgressModal(true);
-      
-      // Detener polling anterior si existe
-      if (stopPollingRef.current) {
-        stopPollingRef.current();
-      }
-      
-      // Iniciar nuevo polling
-      stopPollingRef.current = pollTranscriptionStatus(taskId, (status) => {
-        setCurrentTask(status);
-        
-        // Cuando se complete, cargar la transcripción
-        if (status.status === "completada") {
-          setTimeout(async () => {
-            try {
-              const baseName = filename.replace(/\.[^/.]+$/, "");
-              const transcriptName = `${baseName}.txt`;
-              await fetchTranscriptionLocal(transcriptName);
-              setShowProgressModal(false);
-              toast({ title: "Transcripción generada", description: "La transcripción se generó correctamente.", variant: "default" });
-            } catch (e) {
-              toast({ title: "Error", description: "No se pudo cargar la transcripción.", variant: "destructive" });
-            }
-          }, 1000);
-        }
       });
       
       setAudioUrl(null);
       setRecordingTime(0);
       await fetchAudios();
+      toast({ title: "Transcribiendo audio", description: "El audio se está transcribiendo. Aparecerá en la lista cuando termine.", variant: "default" });
     } catch (e) {
       toast({ title: "Error", description: "No se pudo procesar el audio grabado.", variant: "destructive" });
-      setShowProgressModal(false);
     } finally {
       setIsProcessing(false);
     }
@@ -334,28 +289,8 @@ export default function GrabarAudioPage() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
   }
 
-  // Limpiar polling al desmontar
-  useEffect(() => {
-    return () => {
-      if (stopPollingRef.current) {
-        stopPollingRef.current();
-      }
-    };
-  }, []);
-
   return (
     <div className="relative min-h-screen animate-fade-in">
-      {/* Modal de progreso de transcripción */}
-      <TranscriptionProgressModal 
-        open={showProgressModal} 
-        task={currentTask}
-        onClose={() => {
-          setShowProgressModal(false);
-          if (stopPollingRef.current) {
-            stopPollingRef.current();
-          }
-        }}
-      />
       <AnimatedBackground />
       <main className="relative z-10 container mx-auto px-4 py-16 animate-fade-in-up">
         <div className="max-w-4xl mx-auto text-center">
@@ -455,35 +390,20 @@ export default function GrabarAudioPage() {
                 />
               </div>
             )}
-
-            {/* Estado de la cola */}
-            {queueInfo && (queueInfo.queue_size > 0 || queueInfo.total_processed > 0) && (
-              <div className="mt-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
-                <div className="flex flex-col gap-2 text-sm">
-                  {queueInfo.current_task && queueInfo.current_task.status === "procesando" && (
-                    <p className="font-medium text-blue-700 dark:text-blue-300">
-                      🔄 PROCESANDO: {queueInfo.current_task.filename} ({queueInfo.current_task.model}) {queueInfo.current_task.progress}%
-                    </p>
-                  )}
-                  {queueInfo.queue_size > 0 && (
-                    <p className="text-blue-600 dark:text-blue-400">
-                      ⏳ EN COLA: {queueInfo.queue_size} {queueInfo.queue_size === 1 ? "archivo" : "archivos"} en espera
-                    </p>
-                  )}
-                  {queueInfo.total_processed > 0 && (
-                    <p className="text-green-600 dark:text-green-400">
-                      ✓ COMPLETADAS: {queueInfo.total_processed} transcripción{queueInfo.total_processed !== 1 ? "es" : ""}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
+            
             <div className="space-y-4">
                 <div className={`mb-6 transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}> 
                   <h3 className="font-semibold mb-2">Audios</h3>
                   {loadingList ? (
                     <div className="text-muted-foreground">Cargando...</div>
-                  ) : audios.length === 0 ? (
+                  ) : audios.filter(audio => {
+                    // Filtrar audios que están en transcripción activa
+                    const audioFilename = audio.filename || audio.name;
+                    const isInTranscription = Array.from(activeTasks.values()).some(
+                      task => task.filename === audioFilename && task.status !== 'completada' && task.status !== 'error'
+                    );
+                    return !isInTranscription;
+                  }).length === 0 ? (
                     <div className="text-muted-foreground">No hay audios subidos.</div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -497,7 +417,14 @@ export default function GrabarAudioPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {audios.map((audio: any, idx: any) => (
+                          {audios.filter(audio => {
+                            // Filtrar audios que están en transcripción activa
+                            const audioFilename = audio.filename || audio.name;
+                            const isInTranscription = Array.from(activeTasks.values()).some(
+                              task => task.filename === audioFilename && task.status !== 'completada' && task.status !== 'error'
+                            );
+                            return !isInTranscription;
+                          }).map((audio: any, idx: any) => (
                             <tr key={audio.id || idx} className="border-b last:border-0">
                               <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.filename || audio.name}</td>
                               <td className="p-2 align-middle whitespace-nowrap max-w-xs truncate text-left">{audio.created_at || '-'}</td>

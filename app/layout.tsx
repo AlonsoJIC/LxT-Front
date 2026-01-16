@@ -4,6 +4,8 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/toaster"
+import { TranscriptionProvider } from "@/contexts/TranscriptionContext"
+import { FloatingTranscriptionIndicator } from "@/components/floating-transcription-indicator"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -40,11 +42,15 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <body className={`font-sans antialiased`}>
-        {/* Navbar/Header always visible */}
-        <Header />
-        {children}
-        {/* Toast notifications */}
-        <Toaster />
+        <TranscriptionProvider>
+          {/* Navbar/Header always visible */}
+          <Header />
+          {children}
+          {/* Toast notifications */}
+          <Toaster />
+          {/* Floating transcription indicator */}
+          <FloatingTranscriptionIndicator />
+        </TranscriptionProvider>
         <Analytics />
       </body>
     </html>
