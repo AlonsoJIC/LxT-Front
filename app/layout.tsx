@@ -6,6 +6,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/toaster"
 import { TranscriptionProvider } from "@/contexts/TranscriptionContext"
 import { FloatingTranscriptionIndicator } from "@/components/floating-transcription-indicator"
+import { LicenseWrapper } from "@/components/license/license-wrapper"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -42,15 +43,17 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <body className={`font-sans antialiased`}>
-        <TranscriptionProvider>
-          {/* Navbar/Header always visible */}
-          <Header />
-          {children}
-          {/* Toast notifications */}
-          <Toaster />
-          {/* Floating transcription indicator */}
-          <FloatingTranscriptionIndicator />
-        </TranscriptionProvider>
+        <LicenseWrapper>
+          <TranscriptionProvider>
+            {/* Navbar/Header always visible */}
+            <Header />
+            {children}
+            {/* Toast notifications */}
+            <Toaster />
+            {/* Floating transcription indicator */}
+            <FloatingTranscriptionIndicator />
+          </TranscriptionProvider>
+        </LicenseWrapper>
         <Analytics />
       </body>
     </html>
