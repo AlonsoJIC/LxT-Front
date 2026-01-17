@@ -1,16 +1,11 @@
 import type React from "react"
 import { Header } from "@/components/header"
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/toaster"
 import { TranscriptionProvider } from "@/contexts/TranscriptionContext"
 import { FloatingTranscriptionIndicator } from "@/components/floating-transcription-indicator"
 import { LicenseWrapper } from "@/components/license/license-wrapper"
 import "./globals.css"
-
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "LxT - Transcripción Profesional con IA",
@@ -54,7 +49,6 @@ export default function RootLayout({
             <FloatingTranscriptionIndicator />
           </TranscriptionProvider>
         </LicenseWrapper>
-        <Analytics />
       </body>
     </html>
   )
