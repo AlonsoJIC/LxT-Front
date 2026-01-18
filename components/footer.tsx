@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { FooterLink } from "@/components/ui/footer-link";
 import { FaLinkedin, FaInstagram, FaGlobe } from "react-icons/fa";
 
@@ -7,11 +8,15 @@ export function Footer() {
       <div className="container mx-auto px-4">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <div className="mb-4 flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <span className="font-mono text-lg font-bold text-primary-foreground">LxT</span>
+            <div className="mb-4 flex items-center">
+              <div className="relative h-12 w-12">
+                <Image
+                  src="/logo.png"
+                  alt="LxT Logo"
+                  fill
+                  className="object-contain"
+                />
               </div>
-              <span className="font-semibold">LxT</span>
             </div>
             <p className="text-sm text-muted-foreground">
               Transcripción profesional impulsada por IA, nos enfocamos en la seguridad de tus datos.

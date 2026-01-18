@@ -4,7 +4,7 @@ const nextConfig = {
   basePath: '',
   assetPrefix: '.',
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     unoptimized: true,
