@@ -20,7 +20,6 @@ import {
   WhisperModel
 } from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
-import { ModelSelector } from "@/components/model-selector"
 import { useTranscription } from "@/contexts/TranscriptionContext"
 import {
   AlertDialog,
@@ -47,16 +46,16 @@ export default function GrabarAudioPage() {
   const [confirmDelete, setConfirmDelete] = useState<string|null>(null);
   const [confirmAction, setConfirmAction] = useState<null | { type: 'save' | 'download-txt' | 'download-docx'; payload?: any }>(null);
   
-  // Estados para modelo y speakers
+  // Estados para modelo y speakers con sistema simplificado
   const [selectedModel, setSelectedModel] = useState<WhisperModel>("small");
-  const [useCustomSpeakers, setUseCustomSpeakers] = useState(false);
-  const [minSpeakers, setMinSpeakers] = useState<number>(1);
-  const [maxSpeakers, setMaxSpeakers] = useState<number | null>(null);
+  
+  type SpeakerOption = '1' | '2' | '3-5' | '5+' | 'auto';
+  const [selectedSpeakerOption, setSelectedSpeakerOption] = useState<SpeakerOption>('auto');
+  const [showSpeakerModal, setShowSpeakerModal] = useState(false);
   
   // Usar contexto global para transcripciones
   const { addTask, activeTasks } = useTranscription();
-  
-  useEffect(() => { setIsVisible(true); }, []);
+  const previousTasksRef = useRef<Map<string, TranscriptionTask>>(new Map());
   
   // Estados y lógica de audios subidos y transcripción
   const [audios, setAudios] = useState<any[]>([]);
@@ -66,11 +65,8 @@ export default function GrabarAudioPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    fetchAudios();
-  }, []);
-
+  
+  // Declarar fetchAudios ANTES de los useEffect que lo usan
   const fetchAudios = useCallback(async () => {
     setLoadingList(true);
     try {
@@ -88,6 +84,39 @@ export default function GrabarAudioPage() {
       setLoadingList(false);
     }
   }, []);
+  
+  useEffect(() => { setIsVisible(true); }, []);
+
+  useEffect(() => {
+    fetchAudios();
+  }, [fetchAudios]);
+
+  // Detectar cuando una tarea cambia a "completada" y refrescar la lista
+  useEffect(() => {
+    const previousTasks = previousTasksRef.current;
+    let shouldRefresh = false;
+
+    activeTasks.forEach((task, taskId) => {
+      const previousTask = previousTasks.get(taskId);
+      
+      // Si la tarea pasó de otro estado a "completada", refrescar
+      if (task.status === "completada" && previousTask && previousTask.status !== "completada") {
+        shouldRefresh = true;
+      }
+    });
+
+    // Actualizar ref con el estado actual
+    previousTasksRef.current = new Map(activeTasks);
+
+    if (shouldRefresh) {
+      // Refrescar la lista después de un pequeño delay
+      const timeoutId = setTimeout(() => {
+        fetchAudios();
+      }, 1500);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [activeTasks, fetchAudios]);
 
   const handleDeleteAudio = async (filename: string) => {
     setConfirmDelete(filename);
@@ -243,7 +272,12 @@ export default function GrabarAudioPage() {
   }
 
   // Subir audio grabado
-  const uploadRecordedAudio = async () => {
+  const uploadRecordedAudio = () => {
+    // Mostrar modal de configuración
+    setShowSpeakerModal(true);
+  };
+  
+  const confirmUploadRecordedAudio = async () => {
     if (!audioUrl) return;
     setIsProcessing(true);
     try {
@@ -256,11 +290,40 @@ export default function GrabarAudioPage() {
       
       // Encolar transcripción con el modelo seleccionado
       const filename = uploadRes.filename || file.name;
+      
+      // Mapear opción de speakers a parámetros técnicos
+      let minSpeakers: number;
+      let maxSpeakers: number | undefined;
+      
+      switch (selectedSpeakerOption) {
+        case '1':
+          minSpeakers = 1;
+          maxSpeakers = 1;
+          break;
+        case '2':
+          minSpeakers = 2;
+          maxSpeakers = 2;
+          break;
+        case '3-5':
+          minSpeakers = 3;
+          maxSpeakers = 5;
+          break;
+        case '5+':
+          minSpeakers = 6;
+          maxSpeakers = undefined; // Sin límite
+          break;
+        case 'auto':
+        default:
+          minSpeakers = 2;
+          maxSpeakers = undefined; // Detección automática
+          break;
+      }
+      
       const taskId = await enqueueTranscription(
         filename,
         selectedModel,
-        useCustomSpeakers ? minSpeakers : undefined,
-        useCustomSpeakers ? maxSpeakers ?? undefined : undefined
+        minSpeakers,
+        maxSpeakers
       );
       
       // Agregar a tareas activas usando el contexto global
@@ -280,6 +343,7 @@ export default function GrabarAudioPage() {
       toast({ title: "Error", description: "No se pudo procesar el audio grabado.", variant: "destructive" });
     } finally {
       setIsProcessing(false);
+      setShowSpeakerModal(false);
     }
   }
 
@@ -291,6 +355,139 @@ export default function GrabarAudioPage() {
 
   return (
     <div className="relative min-h-screen animate-fade-in">
+      {/* Modal de configuración de hablantes */}
+      <AlertDialog open={showSpeakerModal} onOpenChange={open => { if (!open) setShowSpeakerModal(false); }}>
+        <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Configuración de transcripción</AlertDialogTitle>
+            <AlertDialogDescription>
+              Configura los parámetros para obtener la mejor transcripción posible
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {/* Sección: Modelo de Whisper */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-base">1. Modelo de transcripción</h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {[
+                { value: 'tiny', label: 'Tiny', desc: 'Muy rápido', icon: '⚡' },
+                { value: 'base', label: 'Base', desc: 'Rápido', icon: '🚀' },
+                { value: 'small', label: 'Small', desc: 'Equilibrado', icon: '⚖️' },
+                { value: 'medium', label: 'Medium', desc: 'Preciso', icon: '🎯' },
+                { value: 'large', label: 'Large', desc: 'Máx. calidad', icon: '👑' },
+              ].map((model) => (
+                <button
+                  key={model.value}
+                  onClick={() => setSelectedModel(model.value as WhisperModel)}
+                  className={`p-3 rounded-lg border-2 transition-all hover:shadow-md ${
+                    selectedModel === model.value
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <div className="text-2xl mb-1">{model.icon}</div>
+                  <div className="font-semibold text-sm">{model.label}</div>
+                  <div className="text-xs text-muted-foreground">{model.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t my-4" />
+
+          {/* Sección: Número de hablantes */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-base">2. ¿Cuántas personas hablan?</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {/* Opción: 1 persona */}
+              <button
+                onClick={() => setSelectedSpeakerOption('1')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                  selectedSpeakerOption === '1'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">👤</div>
+                <div className="font-semibold">1 persona</div>
+                <div className="text-xs text-muted-foreground mt-1">Sin etiquetas</div>
+              </button>
+
+              {/* Opción: 2 personas */}
+              <button
+                onClick={() => setSelectedSpeakerOption('2')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                  selectedSpeakerOption === '2'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">👥</div>
+                <div className="font-semibold">2 personas</div>
+                <div className="text-xs text-muted-foreground mt-1">Conversación</div>
+              </button>
+
+              {/* Opción: 3-5 personas */}
+              <button
+                onClick={() => setSelectedSpeakerOption('3-5')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                  selectedSpeakerOption === '3-5'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">👥👥</div>
+                <div className="font-semibold">3-5 voces</div>
+                <div className="text-xs text-muted-foreground mt-1">Grupo pequeño</div>
+              </button>
+
+              {/* Opción: Más de 5 */}
+              <button
+                onClick={() => setSelectedSpeakerOption('5+')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                  selectedSpeakerOption === '5+'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">👥+</div>
+                <div className="font-semibold">Más de 5</div>
+                <div className="text-xs text-muted-foreground mt-1">Reunión/Panel</div>
+              </button>
+
+              {/* Opción: Automático */}
+              <button
+                onClick={() => setSelectedSpeakerOption('auto')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md md:col-span-2 ${
+                  selectedSpeakerOption === 'auto'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">🤖</div>
+                <div className="font-semibold">Detectar automáticamente</div>
+                <div className="text-xs text-muted-foreground mt-1">Recomendado si no estás seguro</div>
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg mt-4">
+            <p className="text-sm text-blue-900 dark:text-blue-200">
+              💡 <strong>Tip:</strong> Small es el modelo más equilibrado. Large ofrece mejor calidad pero toma más tiempo.
+            </p>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowSpeakerModal(false)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmUploadRecordedAudio}>
+              Transcribir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
       <AnimatedBackground />
       <main className="relative z-10 container mx-auto px-4 py-16 animate-fade-in-up">
         <div className="max-w-4xl mx-auto text-center">
@@ -379,17 +576,6 @@ export default function GrabarAudioPage() {
                 </div>
               )}
             </div>
-
-            {/* Selector de modelo */}
-            {audioUrl && !isProcessing && (
-              <div className="mt-8 p-4 rounded-lg bg-muted/50">
-                <ModelSelector 
-                  value={selectedModel} 
-                  onChange={setSelectedModel}
-                  disabled={isProcessing}
-                />
-              </div>
-            )}
             
             <div className="space-y-4">
                 <div className={`mb-6 transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}> 

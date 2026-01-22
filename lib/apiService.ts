@@ -94,6 +94,7 @@ export interface TranscriptionTask {
   task_id: string;
   status: "pendiente" | "procesando" | "completada" | "error";
   progress: number;
+  current_step?: string; // Paso actual del proceso
   filename: string;
   model: WhisperModel;
   created_at?: string;

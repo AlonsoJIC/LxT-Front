@@ -20,7 +20,6 @@ import {
   WhisperModel
 } from "@/lib/apiService"
 import { useToast } from "@/components/ui/use-toast"
-import { ModelSelector } from "@/components/model-selector"
 import { useTranscription } from "@/contexts/TranscriptionContext"
 import {
   AlertDialog,
@@ -49,23 +48,19 @@ export default function SubirAudioPage() {
   const { toast } = useToast();
   const { activeTasks, addTask } = useTranscription();
   const [isVisible, setIsVisible] = useState(false);
+  const previousTasksRef = useRef<Map<string, TranscriptionTask>>(new Map());
   
-  // Estados para modelo y speakers
+  // Estados para modelo y speakers con sistema simplificado
   const [selectedModel, setSelectedModel] = useState<WhisperModel>("small");
-  const [useCustomSpeakers, setUseCustomSpeakers] = useState(false);
-  const [minSpeakers, setMinSpeakers] = useState<number>(1);
-  const [maxSpeakers, setMaxSpeakers] = useState<number | null>(null);
+  
+  type SpeakerOption = '1' | '2' | '3-5' | '5+' | 'auto';
+  const [selectedSpeakerOption, setSelectedSpeakerOption] = useState<SpeakerOption>('auto');
 
   // Modal para configuración de hablantes al subir/dropear audio
   const [showSpeakerModal, setShowSpeakerModal] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   
-  useEffect(() => { setIsVisible(true); }, []);
-
-  useEffect(() => {
-    fetchAudios();
-  }, []);
-
+  // Declarar fetchAudios ANTES de los useEffect que lo usan
   const fetchAudios = useCallback(async () => {
     setLoadingList(true);
     try {
@@ -83,6 +78,39 @@ export default function SubirAudioPage() {
       setLoadingList(false);
     }
   }, []);
+
+  useEffect(() => { setIsVisible(true); }, []);
+
+  useEffect(() => {
+    fetchAudios();
+  }, [fetchAudios]);
+
+  // Detectar cuando una tarea cambia a "completada" y refrescar la lista
+  useEffect(() => {
+    const previousTasks = previousTasksRef.current;
+    let shouldRefresh = false;
+
+    activeTasks.forEach((task, taskId) => {
+      const previousTask = previousTasks.get(taskId);
+      
+      // Si la tarea pasó de otro estado a "completada", refrescar
+      if (task.status === "completada" && previousTask && previousTask.status !== "completada") {
+        shouldRefresh = true;
+      }
+    });
+
+    // Actualizar ref con el estado actual
+    previousTasksRef.current = new Map(activeTasks);
+
+    if (shouldRefresh) {
+      // Refrescar la lista después de un pequeño delay
+      const timeoutId = setTimeout(() => {
+        fetchAudios();
+      }, 1500);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [activeTasks, fetchAudios]);
 
   const handleFileUpload = (file: File) => {
     setPendingFile(file);
@@ -122,11 +150,40 @@ export default function SubirAudioPage() {
       
       // Encolar transcripción con el modelo seleccionado
       const filename = uploadRes.filename || pendingFile.name;
+      
+      // Mapear opción de speakers a parámetros técnicos
+      let minSpeakers: number;
+      let maxSpeakers: number | undefined;
+      
+      switch (selectedSpeakerOption) {
+        case '1':
+          minSpeakers = 1;
+          maxSpeakers = 1;
+          break;
+        case '2':
+          minSpeakers = 2;
+          maxSpeakers = 2;
+          break;
+        case '3-5':
+          minSpeakers = 3;
+          maxSpeakers = 5;
+          break;
+        case '5+':
+          minSpeakers = 6;
+          maxSpeakers = undefined; // Sin límite
+          break;
+        case 'auto':
+        default:
+          minSpeakers = 2;
+          maxSpeakers = undefined; // Detección automática
+          break;
+      }
+      
       const taskId = await enqueueTranscription(
         filename,
         selectedModel,
-        useCustomSpeakers ? minSpeakers : undefined,
-        useCustomSpeakers ? maxSpeakers ?? undefined : undefined
+        minSpeakers,
+        maxSpeakers
       );
       
       // Agregar a tareas activas usando el contexto global
@@ -237,54 +294,132 @@ export default function SubirAudioPage() {
     <div className="relative min-h-screen">
       {/* Modal de configuración de hablantes */}
       <AlertDialog open={showSpeakerModal} onOpenChange={open => { if (!open) setShowSpeakerModal(false); }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Sabes cuántas personas hablan en el audio?</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl">Configuración de transcripción</AlertDialogTitle>
             <AlertDialogDescription>
-              Puedes especificar el rango de hablantes para mejorar la detección de voces. Si no lo sabes, deja en automático.
+              Configura los parámetros para obtener la mejor transcripción posible
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="flex flex-col gap-4 mt-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={useCustomSpeakers}
-                onChange={e => setUseCustomSpeakers(e.target.checked)}
-                id="modal-speaker-toggle"
-                className="w-4 h-4 cursor-pointer"
-              />
-              <label htmlFor="modal-speaker-toggle" className="font-medium cursor-pointer">Quiero especificar el rango de hablantes</label>
+          
+          {/* Sección: Modelo de Whisper */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-base">1. Modelo de transcripción</h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {[
+                { value: 'tiny', label: 'Tiny', desc: 'Muy rápido', icon: '⚡' },
+                { value: 'base', label: 'Base', desc: 'Rápido', icon: '🚀' },
+                { value: 'small', label: 'Small', desc: 'Equilibrado', icon: '⚖️' },
+                { value: 'medium', label: 'Medium', desc: 'Preciso', icon: '🎯' },
+                { value: 'large', label: 'Large', desc: 'Máx. calidad', icon: '👑' },
+              ].map((model) => (
+                <button
+                  key={model.value}
+                  onClick={() => setSelectedModel(model.value as WhisperModel)}
+                  className={`p-3 rounded-lg border-2 transition-all hover:shadow-md ${
+                    selectedModel === model.value
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <div className="text-2xl mb-1">{model.icon}</div>
+                  <div className="font-semibold text-sm">{model.label}</div>
+                  <div className="text-xs text-muted-foreground">{model.desc}</div>
+                </button>
+              ))}
             </div>
-            {useCustomSpeakers && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium block mb-1">Mínimo de hablantes</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={minSpeakers}
-                    onChange={e => setMinSpeakers(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-full px-2 py-1 rounded border"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">Máximo de hablantes (opcional)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={maxSpeakers || ""}
-                    onChange={e => setMaxSpeakers(e.target.value ? parseInt(e.target.value) : null)}
-                    placeholder="Automático"
-                    className="w-full px-2 py-1 rounded border"
-                  />
-                </div>
-              </div>
-            )}
           </div>
+
+          <div className="border-t my-4" />
+
+          {/* Sección: Número de hablantes */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-base">2. ¿Cuántas personas hablan?</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {/* Opción: 1 persona */}
+              <button
+                onClick={() => setSelectedSpeakerOption('1')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                  selectedSpeakerOption === '1'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">👤</div>
+                <div className="font-semibold">1 persona</div>
+                <div className="text-xs text-muted-foreground mt-1">Sin etiquetas</div>
+              </button>
+
+              {/* Opción: 2 personas */}
+              <button
+                onClick={() => setSelectedSpeakerOption('2')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                  selectedSpeakerOption === '2'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">👥</div>
+                <div className="font-semibold">2 personas</div>
+                <div className="text-xs text-muted-foreground mt-1">Conversación</div>
+              </button>
+
+              {/* Opción: 3-5 personas */}
+              <button
+                onClick={() => setSelectedSpeakerOption('3-5')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                  selectedSpeakerOption === '3-5'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">👥👥</div>
+                <div className="font-semibold">3-5 voces</div>
+                <div className="text-xs text-muted-foreground mt-1">Grupo pequeño</div>
+              </button>
+
+              {/* Opción: Más de 5 */}
+              <button
+                onClick={() => setSelectedSpeakerOption('5+')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                  selectedSpeakerOption === '5+'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">👥+</div>
+                <div className="font-semibold">Más de 5</div>
+                <div className="text-xs text-muted-foreground mt-1">Reunión/Panel</div>
+              </button>
+
+              {/* Opción: Automático */}
+              <button
+                onClick={() => setSelectedSpeakerOption('auto')}
+                className={`p-4 rounded-lg border-2 transition-all hover:shadow-md md:col-span-2 ${
+                  selectedSpeakerOption === 'auto'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="text-3xl mb-2">🤖</div>
+                <div className="font-semibold">Detectar automáticamente</div>
+                <div className="text-xs text-muted-foreground mt-1">Recomendado si no estás seguro</div>
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg mt-4">
+            <p className="text-sm text-blue-900 dark:text-blue-200">
+              💡 <strong>Tip:</strong> Small es el modelo más equilibrado. Large ofrece mejor calidad pero toma más tiempo.
+            </p>
+          </div>
+
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setShowSpeakerModal(false); setPendingFile(null); }}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmSpeakerModal} disabled={uploading}>
-              {uploading ? "Procesando..." : "Confirmar y transcribir"}
+            <AlertDialogCancel onClick={() => { setShowSpeakerModal(false); setPendingFile(null); }}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSpeakerModal}>
+              Transcribir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -418,17 +553,6 @@ export default function SubirAudioPage() {
                       </div>
                     );
                   })}
-                </div>
-              )}
-
-              {/* Selector de modelo */}
-              {!uploading && (
-                <div className="mb-6 p-4 rounded-lg bg-muted/50">
-                  <ModelSelector 
-                    value={selectedModel} 
-                    onChange={setSelectedModel}
-                    disabled={uploading}
-                  />
                 </div>
               )}
 
