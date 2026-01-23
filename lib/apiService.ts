@@ -48,7 +48,29 @@ export async function listarAudiosCaso(casoId: string) {
     const res = await fetch(`${API_BASE}/casos/${casoId}/audio`);
     if (!res.ok) return [];
     const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    // Si la respuesta es { audios: ["nombre1.mp3", ...] }
+    if (data && Array.isArray(data.audios)) {
+      return data.audios.map((nombre: string) => ({
+        id: nombre,
+        nombre,
+        fecha: "-",
+        duracion: "--:--",
+        transcripcion: null,
+        estado: "completado",
+      }));
+    }
+    // Si la respuesta es un array plano
+    if (Array.isArray(data)) {
+      return data.map((nombre) => ({
+        id: nombre,
+        nombre,
+        fecha: "-",
+        duracion: "--:--",
+        transcripcion: null,
+        estado: "completado",
+      }));
+    }
+    return [];
   } catch {
     return [];
   }
@@ -80,7 +102,16 @@ export async function crearCaso(nombre: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ nombre }),
   });
-  if (!res.ok) throw new Error("Error al crear el caso");
+  if (!res.ok) {
+    let msg = "Error al crear el caso";
+    try {
+      const data = await res.json();
+      if (data && data.detail && typeof data.detail === "string") {
+        msg = data.detail;
+      }
+    } catch { }
+    throw new Error(`${msg} (${res.status})`);
+  }
   return res.json();
 }
 
@@ -93,10 +124,13 @@ export async function eliminarCaso(casoId: string) {
 // ========== AUDIO Y GRABACIÓN ========== 
 export async function subirAudio(casoId: string, file: File) {
   const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch(`${API_BASE}/${casoId}/audio/upload`, {
+  formData.append("archivo", file);
+  const res = await fetch(`${API_BASE}/casos/${casoId}/audio/upload`, {
     method: "POST",
     body: formData,
+    headers: {
+      Accept: "application/json",
+    },
   });
   if (!res.ok) throw new Error("Error al subir el audio");
   return res.json();
@@ -164,13 +198,12 @@ export interface QueueInfo {
  * @param maxSpeakers Máximo de hablantes (default null para automático)
  */
 export async function enqueueTranscription(
-  filename: string,
+  casoId: string,
   model: WhisperModel = "small",
   minSpeakers?: number,
   maxSpeakers?: number
 ): Promise<string> {
   const params = new URLSearchParams();
-  params.append("filename", filename);
   params.append("model", model);
   if (minSpeakers !== undefined) {
     params.append("min_speakers", minSpeakers.toString());
@@ -178,13 +211,12 @@ export async function enqueueTranscription(
   if (maxSpeakers !== undefined) {
     params.append("max_speakers", maxSpeakers.toString());
   }
-
-  const res = await fetch(`${API_BASE}/transcript/queue?${params.toString()}`, {
+  const res = await fetch(`${API_BASE}/casos/${casoId}/procesar?${params.toString()}`, {
     method: "POST",
   });
   if (!res.ok) throw new Error("Error al encolar la transcripción");
   const data = await res.json();
-  return data.task_id;
+  return data.task_id || data.id || data.taskId || "";
 }
 
 /**
@@ -192,7 +224,7 @@ export async function enqueueTranscription(
  * @param taskId ID de la tarea
  */
 export async function getTranscriptionStatus(taskId: string): Promise<TranscriptionTask> {
-  const res = await fetch(`${API_BASE}/transcript/status/${taskId}`);
+  const res = await fetch(`${API_BASE}/casos/queue/status/${taskId}`);
   if (!res.ok) {
     if (res.status === 404) {
       throw new Error("TASK_NOT_FOUND");
@@ -206,7 +238,7 @@ export async function getTranscriptionStatus(taskId: string): Promise<Transcript
  * Obtener información general de la cola
  */
 export async function getQueueInfo(): Promise<QueueInfo> {
-  const res = await fetch(`${API_BASE}/transcript/queue/info`);
+  const res = await fetch(`${API_BASE}/casos/queue/info`);
   if (!res.ok) throw new Error("Error al obtener información de la cola");
   return res.json();
 }
@@ -252,15 +284,28 @@ export function pollTranscriptionStatus(
 }
 
 /**
- * Descargar transcripción en formato DOCX
- * @param filename Nombre del archivo de transcripción (.txt)
+ * Descargar transcripción en formato DOCX por caso
+ * @param casoId ID del caso
  */
-export function downloadTranscriptionDocx(filename: string) {
-  const url = `${API_BASE}/transcript/export_docx/${filename}`;
-  const a = document.createElement("a");
+export async function descargarTranscripcionDOCX(casoId: string) {
+  const res = await fetch(`${API_BASE}/casos/casos/${casoId}/transcripcion/docx`);
+  if (!res.ok) throw new Error("Error al descargar la transcripción DOCX");
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
   a.href = url;
-  a.download = filename.replace(/\.[^/.]+$/, "") + ".docx";
+  a.download = `transcripcion_${casoId}.docx`;
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+/**
+ * Listar modelos Whisper disponibles
+ */
+export async function listarModelosWhisper(): Promise<WhisperModel[]> {
+  const res = await fetch(`${API_BASE}/casos/modelos/whisper`);
+  if (!res.ok) throw new Error("Error al obtener modelos Whisper");
+  return res.json();
 }

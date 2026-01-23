@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FolderPlus, Sparkles } from "lucide-react";
@@ -23,8 +24,12 @@ export default function CrearCasoPage() {
     try {
       const nuevoCaso = await crearCaso(nombre.trim());
       router.push(`/casos/${nuevoCaso.id}`);
-    } catch (err) {
-      setError("No se pudo crear el caso. Intenta de nuevo.");
+    } catch (err: any) {
+      if (err instanceof Error && err.message && err.message.includes("400")) {
+        setError("Ya existe un caso con ese nombre. Elige un nombre diferente.");
+      } else {
+        setError("No se pudo crear el caso. Intenta de nuevo.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -41,69 +46,64 @@ export default function CrearCasoPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver a casos
         </Link>
-
-        {/* Card principal */}
-        <div className="rounded-2xl border border-border bg-card p-8">
-          {/* Header */}
-          <div className="mb-8 text-center">
+        <Card>
+          <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
               <FolderPlus className="h-8 w-8 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <CardTitle>
               Crear nuevo <span className="text-primary">caso</span>
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
+            </CardTitle>
+            <CardDescription>
               Organiza tus transcripciones en un nuevo caso
-            </p>
-          </div>
-
-          {/* Formulario */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="nombre" className="text-foreground">
-                Nombre del caso
-              </Label>
-              <Input
-                id="nombre"
-                type="text"
-                placeholder="Ej: Audiencia 2024-001"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                className="bg-input border-border focus:border-primary focus:ring-primary"
-                autoFocus
-              />
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="nombre" className="text-foreground">
+                  Nombre del caso
+                </Label>
+                <Input
+                  id="nombre"
+                  type="text"
+                  placeholder="Ejemplo: 26-000123-0123-PE"
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  className="bg-input border-border focus:border-primary focus:ring-primary"
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">
+                  Usa un nombre descriptivo para identificar fácilmente este caso
+                </p>
+              </div>
+              {error && <div className="text-red-500 text-sm">{error}</div>}
+              <Button
+                type="submit"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                disabled={!nombre.trim() || isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                    Creando...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Crear caso
+                  </>
+                )}
+              </Button>
+            </form>
+            <div className="mt-6 rounded-lg bg-muted/50 p-4">
               <p className="text-xs text-muted-foreground">
-                Usa un nombre descriptivo para identificar fácilmente este caso
+                <span className="font-medium text-foreground">Tip:</span> Una vez creado el caso, 
+                podrás subir audios, grabar directamente y gestionar todas tus transcripciones.
               </p>
             </div>
-            {error && <div className="text-red-500 text-sm">{error}</div>}
-            <Button
-              type="submit"
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={!nombre.trim() || isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                  Creando...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Crear caso
-                </>
-              )}
-            </Button>
-          </form>
-
-          {/* Tip */}
-          <div className="mt-6 rounded-lg bg-muted/50 p-4">
-            <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Tip:</span> Una vez creado el caso, 
-              podrás subir audios, grabar directamente y gestionar todas tus transcripciones.
-            </p>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </main>
   );

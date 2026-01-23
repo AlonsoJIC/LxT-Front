@@ -1,8 +1,10 @@
 
 "use client";
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { Spinner } from "@/components/ui/spinner";
+// ...existing code...
 import Link from "next/link";
-import { listarCasos, eliminarCaso } from "@/lib/apiService";
+import { listarCasos, eliminarCaso, subirAudio, listarAudiosCaso } from "@/lib/apiService";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -51,6 +53,8 @@ export default function CasoDetallePage({ casoId, onBack }: { casoId: string, on
   const [grabaciones, setGrabaciones] = useState<any[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [itemAEliminar, setItemAEliminar] = useState<{ id: string; tipo: "audio" | "grabacion" } | null>(null);
   const [transcripcionVisible, setTranscripcionVisible] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -63,36 +67,53 @@ export default function CasoDetallePage({ casoId, onBack }: { casoId: string, on
       const found = Array.isArray(data) ? data.find((c: any) => c.id === casoId) : null;
       setCaso(found);
       setLoading(false);
-      // Si el caso tiene audios y grabaciones, cargarlos aquí
-      setAudios(found?.audios || []);
+      // No inicializar audios desde found, siempre cargar desde backend
       setGrabaciones(found?.grabaciones || []);
+    });
+    // Siempre cargar audios desde backend
+    listarAudiosCaso(casoId).then(audiosRaw => {
+      // Map to ensure all required fields are present
+      const audios = audiosRaw.map((audio: any) => ({
+        id: audio.id || audio.nombre || audio,
+        nombre: audio.nombre || audio.id || audio,
+        fecha: audio.fecha || new Date().toISOString().split("T")[0],
+        duracion: audio.duracion || "--:--",
+        transcripcion: audio.transcripcion || null,
+        estado: audio.estado || "completado",
+      }));
+      setAudios(audios);
     });
   }, [casoId]);
 
-  const handleFiles = useCallback((files: FileList | null) => {
+  const handleFiles = useCallback(async (files: FileList | null) => {
     if (!files) return;
-    const nuevosAudios = Array.from(files)
-      .filter(file => file.type.startsWith("audio/"))
-      .map((file, index) => ({
-        id: `new-${Date.now()}-${index}`,
-        nombre: file.name,
-        fecha: new Date().toISOString().split("T")[0],
-        duracion: "--:--",
-        transcripcion: null,
-        estado: "procesando",
-      }));
-    if (nuevosAudios.length === 0) return;
-    setAudios(prev => [...nuevosAudios, ...prev]);
-    setTimeout(() => {
-      setAudios((prev) =>
-        prev.map((audio) =>
-          audio.estado === "procesando"
-            ? { ...audio, estado: "pendiente", duracion: "03:45" }
-            : audio
-        )
-      );
-    }, 2000);
-  }, []);
+    const validFiles = Array.from(files).filter(file => file.type.startsWith("audio/"));
+    if (validFiles.length === 0) return;
+    for (const file of validFiles) {
+      // Mostrar audio en estado de subida
+      const tempId = `uploading-${Date.now()}-${Math.random()}`;
+      setAudios(prev => [
+        {
+          id: tempId,
+          nombre: file.name,
+          fecha: new Date().toISOString().split("T")[0],
+          duracion: "--:--",
+          transcripcion: null,
+          estado: "subiendo",
+        },
+        ...prev
+      ]);
+      try {
+        await subirAudio(casoId, file);
+        // Refrescar lista real desde backend
+        const actualizados = await listarAudiosCaso(casoId);
+        setAudios(actualizados);
+      } catch (e) {
+        setAudios(prev => prev.filter(a => a.id !== tempId));
+        // Aquí podrías mostrar un toast de error si tienes sistema de notificaciones
+      }
+    }
+  }, [casoId]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     handleFiles(e.target.files);
@@ -114,38 +135,64 @@ export default function CasoDetallePage({ casoId, onBack }: { casoId: string, on
     handleFiles(e.dataTransfer.files);
   }, [handleFiles]);
 
-  const startRecording = () => {
+  const startRecording = async () => {
     setIsRecording(true);
     setRecordingTime(0);
-    timerRef.current = setInterval(() => {
-      setRecordingTime((prev) => prev + 1);
-    }, 1000);
+    setAudioChunks([]);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new window.MediaRecorder(stream);
+      setMediaRecorder(recorder);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) setAudioChunks((prev) => [...prev, e.data]);
+      };
+      recorder.onstop = async () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        setIsRecording(false);
+        setRecordingTime(0);
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const file = new File([audioBlob], `grabacion_${Date.now()}.webm`, { type: 'audio/webm' });
+        // Mostrar grabación en estado de subida
+        const tempId = `grabando-${Date.now()}-${Math.random()}`;
+        setGrabaciones(prev => [
+          {
+            id: tempId,
+            nombre: file.name,
+            fecha: new Date().toISOString().split("T")[0],
+            duracion: formatTime(recordingTime),
+            transcripcion: null,
+            estado: "subiendo",
+          },
+          ...prev
+        ]);
+        try {
+          await subirAudio(casoId, file);
+          // Refrescar lista real desde backend (si backend los separa, aquí deberías refrescar grabaciones)
+          const actualizados = await listarAudiosCaso(casoId);
+          setAudios(actualizados);
+          setGrabaciones(prev => prev.filter(g => g.id !== tempId));
+        } catch (e) {
+          setGrabaciones(prev => prev.filter(g => g.id !== tempId));
+        }
+      };
+      recorder.start();
+      timerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+    } catch (e) {
+      setIsRecording(false);
+      setRecordingTime(0);
+    }
   };
 
   const stopRecording = () => {
-    setIsRecording(false);
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+      setMediaRecorder(null);
+    }
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
-    const nuevaGrabacion = {
-      id: `g-${Date.now()}`,
-      nombre: `Grabación ${grabaciones.length + 1}`,
-      fecha: new Date().toISOString().split("T")[0],
-      duracion: formatTime(recordingTime),
-      transcripcion: null,
-      estado: "procesando",
-    };
-    setGrabaciones([nuevaGrabacion, ...grabaciones]);
-    setTimeout(() => {
-      setGrabaciones((prev) =>
-        prev.map((g) =>
-          g.id === nuevaGrabacion.id
-            ? { ...g, estado: "completado", transcripcion: "Transcripción automática de la grabación..." }
-            : g
-        )
-      );
-    }, 3000);
-    setRecordingTime(0);
   };
 
   const formatTime = (seconds: number) => {
@@ -177,7 +224,12 @@ export default function CasoDetallePage({ casoId, onBack }: { casoId: string, on
     }
   };
 
-  if (loading) return <div className="mt-10 text-center">Cargando...</div>;
+  if (loading) return (
+    <div className="mt-10 flex flex-col items-center justify-center">
+      <Spinner className="h-8 w-8 mb-4 text-primary animate-spin" />
+      <span className="text-muted-foreground">Cargando...</span>
+    </div>
+  );
   if (!caso) return <div className="mt-10 text-center">Caso no encontrado</div>;
 
   return (

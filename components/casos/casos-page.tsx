@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { listarCasos, eliminarCaso } from "@/lib/apiService";
+import { Spinner } from "@/components/ui/spinner";
 import { Search, Plus, FolderOpen, MoreVertical, Eye, Pencil, Trash2, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -95,7 +97,10 @@ function CasosPage() {
         {/* Lista de casos */}
         <div className="space-y-3">
           {loading ? (
-            <div className="text-center text-muted-foreground">Cargando casos...</div>
+            <div className="flex flex-col items-center justify-center py-8">
+              <Spinner className="h-8 w-8 mb-4 text-primary animate-spin" />
+              <span className="text-muted-foreground">Cargando casos...</span>
+            </div>
           ) : casosFiltrados.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card p-12 text-center">
               <FolderOpen className="mb-4 h-16 w-16 text-muted-foreground" />
@@ -114,73 +119,71 @@ function CasosPage() {
             </div>
           ) : (
             casosFiltrados.map((caso) => (
-              <div
-                key={caso.id}
-                className="group flex items-center justify-between rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/50 hover:bg-card/80"
-              >
-                <Link href={`/casos/${caso.id}`} className="flex flex-1 items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                    <FolderOpen className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                      {caso.nombre}
-                    </h3>
-                    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" />
-                        {caso.fechaCreacion ? new Date(caso.fechaCreacion).toLocaleDateString("es-ES", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        }) : ""}
-                      </span>
-                      <span className="hidden sm:inline">•</span>
-                      <span className="hidden sm:inline">{caso.audios ?? 0} audios</span>
-                      <span className="hidden sm:inline">•</span>
-                      <span className="hidden sm:inline">{caso.transcripciones ?? 0} transcripciones</span>
+              <Card key={caso.id} className="group flex flex-row items-center justify-between p-0 transition-all hover:border-primary/50 hover:bg-card/80">
+                <CardContent className="flex flex-1 items-center gap-4 py-4">
+                  <Link href={`/casos/${caso.id}`} className="flex flex-1 items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                      <FolderOpen className="h-6 w-6 text-primary" />
                     </div>
-                  </div>
-                </Link>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                      <span className="sr-only">Opciones</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 bg-popover border-border">
-                    <DropdownMenuItem asChild>
-                      <Link href={`/casos/${caso.id}`} className="flex cursor-pointer items-center">
-                        <Eye className="mr-2 h-4 w-4" />
-                        Ver detalles
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setCasoARenombrar({ id: caso.id, nombre: caso.nombre })
-                        setNuevoNombre(caso.nombre)
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Renombrar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setCasoAEliminar(caso.id)}
-                      className="cursor-pointer text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Eliminar caso
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                        {caso.nombre}
+                      </h3>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {caso.fechaCreacion ? new Date(caso.fechaCreacion).toLocaleDateString("es-ES", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          }) : ""}
+                        </span>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="hidden sm:inline">{caso.audios ?? 0} audios</span>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="hidden sm:inline">{caso.transcripciones ?? 0} transcripciones</span>
+                      </div>
+                    </div>
+                  </Link>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                        <span className="sr-only">Opciones</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 bg-popover border-border">
+                      <DropdownMenuItem asChild>
+                        <Link href={`/casos/${caso.id}`} className="flex cursor-pointer items-center">
+                          <Eye className="mr-2 h-4 w-4" />
+                          Ver detalles
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setCasoARenombrar({ id: caso.id, nombre: caso.nombre })
+                          setNuevoNombre(caso.nombre)
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Renombrar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setCasoAEliminar(caso.id)}
+                        className="cursor-pointer text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Eliminar caso
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </CardContent>
+              </Card>
             ))
           )}
         </div>

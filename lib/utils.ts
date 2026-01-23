@@ -1,6 +1,6 @@
-import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
+// lib/utils.ts
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+// Utility function for className concatenation (like clsx/cn)
+export function cn(...args: any[]): string {
+  return args.filter(Boolean).join(' ');
 }

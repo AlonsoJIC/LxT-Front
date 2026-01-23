@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { obtenerTranscripcion, actualizarTranscripcion, descargarTranscripcionTXT, downloadTranscriptionDocx } from "@/lib/apiService";
+import { obtenerTranscripcion, actualizarTranscripcion, descargarTranscripcionTXT, descargarTranscripcionDOCX } from "@/lib/apiService";
 import { Button } from "@/components/ui/button";
 
 export default function CasoTranscripcionView({ casoId }: { casoId: string }) {
