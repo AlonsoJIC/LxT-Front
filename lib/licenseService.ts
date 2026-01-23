@@ -8,6 +8,8 @@ export interface LicenseStatus {
   user_message: string;
   days_remaining: number;
   technical_status: string;
+  machine_id?: string;
+  features?: any;
 }
 
 export interface CachedLicenseStatus {
@@ -30,8 +32,9 @@ export interface LicenseFeatures {
   };
 }
 
+// Nuevo endpoint: /verificar-licencia (POST)
 export async function getLicenseStatus(): Promise<LicenseStatus> {
-  const res = await fetch(`${LICENSE_API_BASE}/api/license/status`);
+  const res = await fetch(`${LICENSE_API_BASE}/verificar-licencia`, { method: "POST" });
   if (!res.ok) {
     if (res.status === 404) {
       throw new Error("404: Archivo de licencia no encontrado");
@@ -49,12 +52,11 @@ export async function getCachedLicenseStatus(): Promise<CachedLicenseStatus> {
   return res.json();
 }
 
+// El machine_id ahora viene en la respuesta de getLicenseStatus
 export async function getMachineId(): Promise<MachineIdResponse> {
-  const res = await fetch(`${LICENSE_API_BASE}/api/license/machine-id`);
-  if (!res.ok) {
-    throw new Error("Error al obtener el Machine ID");
-  }
-  return res.json();
+  const license = await getLicenseStatus();
+  if (!license.machine_id) throw new Error("No se pudo obtener el Machine ID");
+  return { machine_id: license.machine_id };
 }
 
 export async function getLicenseFeatures(): Promise<LicenseFeatures> {

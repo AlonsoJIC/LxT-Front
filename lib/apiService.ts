@@ -1,79 +1,123 @@
-export async function fetchTranscripts() {
-  const res = await fetch(`${API_BASE}/transcript/list`);
-  if (!res.ok) throw new Error("Error al obtener la lista de transcripciones");
+/**
+ * Descargar la transcripción en formato TXT
+ * @param casoId ID del caso
+ */
+export async function descargarTranscripcionTXT(casoId: string) {
+  const res = await fetch(`${API_BASE}/casos/${casoId}/transcripcion/txt`);
+  if (!res.ok) throw new Error("Error al descargar la transcripción TXT");
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `transcripcion_${casoId}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+// ========== TRANSCRIPCIONES ========== 
+/**
+ * Obtener la transcripción de un caso
+ * @param casoId ID del caso
+ */
+export async function obtenerTranscripcion(casoId: string) {
+  const res = await fetch(`${API_BASE}/casos/${casoId}/transcripcion`);
+  if (!res.ok) throw new Error("Error al obtener la transcripción");
   return res.json();
 }
-export async function deleteAudio(filename: string) {
-  // Usar la ruta y nombre completo con extensión
-  const endpoint = `${API_BASE}/audio/${filename}`;
-  const res = await fetch(endpoint, {
-    method: "DELETE"
+
+/**
+ * Actualizar la transcripción de un caso
+ * @param casoId ID del caso
+ * @param transcripcion Array de objetos con texto de transcripción
+ */
+export async function actualizarTranscripcion(casoId: string, transcripcion: { text: string }[]) {
+  const res = await fetch(`${API_BASE}/casos/${casoId}/transcripcion`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(transcripcion),
   });
+  if (!res.ok) throw new Error("Error al actualizar la transcripción");
+  return res.json();
+}
+export const API_BASE = "http://127.0.0.1:8000";
+
+// ========== AUDIOS DE CASO ========== 
+export async function listarAudiosCaso(casoId: string) {
+  try {
+    const res = await fetch(`${API_BASE}/casos/${casoId}/audio`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function eliminarAudioCaso(casoId: string, audioId: string) {
+  const res = await fetch(`${API_BASE}/casos/${casoId}/audio/${audioId}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Error al eliminar el audio");
   return res.json();
 }
 
-export async function deleteTranscription(filename: string) {
-  // Asegurarse de que el nombre incluya .txt
-  // El backend espera el nombre exacto, incluyendo .txt si corresponde
-  const res = await fetch(`${API_BASE}/transcript/${filename}`, {
-    method: "DELETE"
-  });
-  if (!res.ok) throw new Error("Error al eliminar la transcripción");
+// ========== LICENCIAMIENTO Y SEGURIDAD ========== 
+export async function verificarLicencia() {
+  const res = await fetch(`${API_BASE}/verificar-licencia`, { method: "POST" });
+  if (!res.ok) throw new Error("Error al verificar la licencia");
   return res.json();
 }
-// lib/apiService.ts
 
-export const API_BASE = "http://127.0.0.1:8000";
+// ========== GESTIÓN DE CASOS ========== 
+export async function listarCasos() {
+  const res = await fetch(`${API_BASE}/casos`);
+  if (!res.ok) throw new Error("Error al obtener los casos");
+  return res.json();
+}
 
-export async function uploadAudio(file: File) {
+export async function crearCaso(nombre: string) {
+  const res = await fetch(`${API_BASE}/casos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre }),
+  });
+  if (!res.ok) throw new Error("Error al crear el caso");
+  return res.json();
+}
+
+export async function eliminarCaso(casoId: string) {
+  const res = await fetch(`${API_BASE}/casos/${casoId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Error al eliminar el caso");
+  return res.json();
+}
+
+// ========== AUDIO Y GRABACIÓN ========== 
+export async function subirAudio(casoId: string, file: File) {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(`${API_BASE}/audio/upload`, {
+  const res = await fetch(`${API_BASE}/${casoId}/audio/upload`, {
     method: "POST",
     body: formData,
   });
-  if (!res.ok) throw new Error("Error al subir el archivo");
+  if (!res.ok) throw new Error("Error al subir el audio");
   return res.json();
 }
 
-export async function fetchAudios() {
-  const res = await fetch(`${API_BASE}/audio/list`);
-  if (!res.ok) throw new Error("Error al obtener la lista");
+export async function iniciarGrabacion(casoId: string) {
+  const res = await fetch(`${API_BASE}/${casoId}/audio/grabacion/iniciar`, { method: "POST" });
+  if (!res.ok) throw new Error("Error al iniciar la grabación");
   return res.json();
 }
 
-export async function fetchTranscription(filename: string) {
-  const res = await fetch(`${API_BASE}/transcript/${filename}`);
-  if (!res.ok) throw new Error("Error al obtener la transcripción");
-  const json = await res.json();
-  return json;
-}
-
-export async function generateTranscription(filename: string, minSpeakers?: number, maxSpeakers?: number) {
-  const params = new URLSearchParams();
-  params.append("filename", filename);
-  if (minSpeakers !== undefined) {
-    params.append("min_speakers", minSpeakers.toString());
-  }
-  if (maxSpeakers !== undefined) {
-    params.append("max_speakers", maxSpeakers.toString());
-  }
-
-  const res = await fetch(`${API_BASE}/transcript?${params.toString()}`, {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error("Error al generar la transcripción");
+export async function detenerGrabacion(casoId: string) {
+  const res = await fetch(`${API_BASE}/${casoId}/audio/grabacion/detener`, { method: "POST" });
+  if (!res.ok) throw new Error("Error al detener la grabación");
   return res.json();
 }
 
-export async function saveTranscription(filename: string, text: string) {
-  const res = await fetch(`${API_BASE}/transcript/${filename}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-  if (!res.ok) throw new Error("Error al guardar la transcripción");
+// ========== PROCESAMIENTO Y PIPELINE ========== 
+export async function procesarAudio(casoId: string, modeloWhisper: string = "small") {
+  const res = await fetch(`${API_BASE}/casos/${casoId}/procesar?modelo_whisper=${modeloWhisper}`, { method: "POST" });
+  if (!res.ok) throw new Error("Error al procesar el audio");
   return res.json();
 }
 
@@ -86,6 +130,7 @@ export function downloadTranscription(filename: string) {
   a.click();
   document.body.removeChild(a);
 }
+
 // ============= NUEVO SISTEMA DE COLAS Y POLLING =============
 
 export type WhisperModel = "tiny" | "base" | "small" | "medium" | "large";

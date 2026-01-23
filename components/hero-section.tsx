@@ -1,4 +1,6 @@
+
 "use client"
+import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Mic } from "lucide-react"
@@ -52,25 +54,25 @@ export function HeroSection() {
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
             }`}
           >
-            <a href="/subir-audio">
-              <Button
-                size="lg"
-                className="gap-2 transition-all hover:scale-105 hover:shadow-lg hover:shadow-red-500/20 group bg-red-500 text-white"
-              >
-                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                Subir audio
-              </Button>
-            </a>
-            <a href="/grabar-audio">
-              <Button
-                size="lg"
-                variant="outline"
-                className="gap-2 transition-all hover:scale-105 hover:border-red-500 hover:text-red-500 bg-transparent group"
-              >
-                <Mic className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                Grabar audio
-              </Button>
-            </a>
+              <Link href="/casos">
+                <Button
+                  size="lg"
+                  className="gap-2 transition-all hover:scale-105 hover:shadow-lg hover:shadow-red-500/20 group bg-red-500 text-white"
+                >
+                  <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                  Ir a casos
+                </Button>
+              </Link>
+              <Link href="/crear-caso">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="gap-2 transition-all hover:scale-105 hover:border-red-500 hover:text-red-500 bg-transparent group"
+                >
+                  <Mic className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                  Crear nuevo caso
+                </Button>
+              </Link>
           </div>
 
           <div
