@@ -1,143 +1,251 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+// Nueva UI adaptada de v0/casos/page.tsx, pero usando lógica real
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { listarCasos, eliminarCaso } from "@/lib/apiService";
-import { useToast } from "@/components/ui/use-toast";
+import { Search, Plus, FolderOpen, MoreVertical, Eye, Pencil, Trash2, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AnimatedBackground } from "../animated-background";
-import CasoDetallePage from "./caso-detalle-page";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 function CasosPage() {
+  const [busqueda, setBusqueda] = useState("");
   const [casos, setCasos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editNombre, setEditNombre] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [page, setPage] = useState(1);
-  const [selectedCasoId, setSelectedCasoId] = useState<string | null>(null);
-  const PAGE_SIZE = 10;
-  const { toast } = useToast();
+  const [casoAEliminar, setCasoAEliminar] = useState<string | null>(null);
+  const [casoARenombrar, setCasoARenombrar] = useState<{ id: string; nombre: string } | null>(null);
+  const [nuevoNombre, setNuevoNombre] = useState("");
 
   useEffect(() => {
     listarCasos().then(data => {
-      setCasos(data);
+      setCasos(Array.isArray(data) ? data : []);
       setLoading(false);
     });
   }, []);
 
-  // Búsqueda en tiempo real (case-insensitive)
-  const casosFiltrados = useMemo(() => {
-    return casos.filter((c: any) => c.nombre.toLowerCase().includes(search.toLowerCase()));
-  }, [casos, search]);
+  const casosFiltrados = casos.filter((caso) =>
+    caso.nombre.toLowerCase().includes(busqueda.toLowerCase())
+  );
 
-  // Paginación
-  const totalPages = Math.max(1, Math.ceil(casosFiltrados.length / PAGE_SIZE));
-  const casosPagina = casosFiltrados.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  // Simulación de renombrar caso (debería implementarse en el backend)
-  const handleRename = async (caso: any) => {
-    setSaving(true);
-    // Aquí deberías llamar a tu API real para renombrar el caso
-    setTimeout(() => {
-      setCasos(prev => prev.map((c: any) => c.id === caso.id ? { ...c, nombre: editNombre } : c));
-      setEditId(null);
-      setSaving(false);
-    }, 800);
+  const handleEliminar = async (id: string) => {
+    await eliminarCaso(id);
+    setCasos(casos => casos.filter((caso) => caso.id !== id));
+    setCasoAEliminar(null);
   };
 
-  // Confirmación y eliminación real de caso
-  const handleEliminar = async (caso: any) => {
-    if (!window.confirm(`¿Seguro que deseas eliminar el caso "${caso.nombre}"? Esta acción se puede deshacer por unos segundos.`)) return;
-    setSaving(true);
-    // Guardar copia para deshacer
-    const backup = caso;
-    setCasos(prev => prev.filter((c: any) => c.id !== caso.id));
-    toast({
-      title: `Caso eliminado`,
-      description: `El caso "${caso.nombre}" fue eliminado.`,
-      action: (
-        <button
-          className="ml-2 underline text-primary"
-          onClick={() => {
-            setCasos(prev => [backup, ...prev]);
-            setSaving(false);
-          }}
-        >Deshacer</button>
-      ),
-      variant: "default",
-    });
-    // Eliminar realmente después de 5s si no se deshace
-    setTimeout(async () => {
-      if (!casos.find((c: any) => c.id === caso.id)) {
-        await eliminarCaso(caso.id);
-      }
-      setSaving(false);
-    }, 5000);
+  const handleRenombrar = async () => {
+    if (casoARenombrar && nuevoNombre.trim()) {
+      // Aquí deberías llamar a tu API real para renombrar el caso si existe endpoint
+      setCasos(
+        casos.map((caso) =>
+          caso.id === casoARenombrar.id ? { ...caso, nombre: nuevoNombre.trim() } : caso
+        )
+      );
+      setCasoARenombrar(null);
+      setNuevoNombre("");
+    }
   };
 
-  if (selectedCasoId) {
-    return <CasoDetallePage casoId={selectedCasoId} onBack={() => setSelectedCasoId(null)} />;
-  }
   return (
-    <div className="max-w-2xl mx-auto mt-10">
-      <AnimatedBackground />
-      <h1 className="text-2xl font-bold mb-4">Casos</h1>
-      <Button className="mb-4" onClick={() => alert('Implementar creación de caso local')}>Crear nuevo caso</Button>
-      <input
-        type="text"
-        placeholder="Buscar caso..."
-        className="w-full mb-4 border border-input bg-background text-foreground rounded px-3 py-2"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        autoFocus
-      />
-      {loading ? (
-        <div>Cargando...</div>
-      ) : (
-        <>
-          <ul className="space-y-2">
-            {casosFiltrados.length === 0 ? (
-              <li className="border border-input bg-muted text-muted-foreground rounded p-4 text-center italic">No se encontraron casos.</li>
-            ) : casosPagina.map((caso: any) => (
-              <li key={caso.id} className="border rounded p-4 flex justify-between items-center gap-2">
-                {editId === caso.id ? (
-                  <>
-                    <input
-                      className="border border-input bg-background text-foreground rounded px-2 py-1 mr-2"
-                      value={editNombre}
-                      onChange={e => setEditNombre(e.target.value)}
-                      disabled={saving}
-                      autoFocus
-                    />
-                    <Button size="sm" onClick={() => handleRename(caso)} disabled={saving || !editNombre.trim()} variant="default">
-                      {saving ? "Guardando..." : "Guardar"}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditId(null)} disabled={saving}>Cancelar</Button>
-                  </>
-                ) : (
-                  <>
-                    <span>{caso.nombre}</span>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => { setEditId(caso.id); setEditNombre(caso.nombre); }}>Renombrar</Button>
-                      <Button size="sm" onClick={() => setSelectedCasoId(caso.id)}>Ver detalles</Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleEliminar(caso)} disabled={saving}>Eliminar</Button>
-                    </div>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-          {/* Controles de paginación */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-2 mt-4">
-              <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Anterior</Button>
-              <span className="text-sm">Página {page} de {totalPages}</span>
-              <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Siguiente</Button>
+    <main className="min-h-screen bg-background p-6 md:p-10">
+      <div className="mx-auto max-w-5xl">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground md:text-4xl">
+            Mis <span className="text-primary">Casos</span>
+          </h1>
+          <p className="mt-2 text-muted-foreground">
+            Gestiona y organiza todos tus casos de transcripción
+          </p>
+        </div>
+
+        {/* Barra de búsqueda y botón crear */}
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar casos..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="pl-10 bg-card border-border focus:border-primary focus:ring-primary"
+            />
+          </div>
+          <Link href="/crear-caso">
+            <Button className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Plus className="mr-2 h-4 w-4" />
+              Crear nuevo caso
+            </Button>
+          </Link>
+        </div>
+
+        {/* Lista de casos */}
+        <div className="space-y-3">
+          {loading ? (
+            <div className="text-center text-muted-foreground">Cargando casos...</div>
+          ) : casosFiltrados.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card p-12 text-center">
+              <FolderOpen className="mb-4 h-16 w-16 text-muted-foreground" />
+              <h3 className="text-lg font-medium text-foreground">No se encontraron casos</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {busqueda ? "Intenta con otra búsqueda" : "Crea tu primer caso para comenzar"}
+              </p>
+              {!busqueda && (
+                <Link href="/crear-caso" className="mt-4">
+                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Crear caso
+                  </Button>
+                </Link>
+              )}
             </div>
+          ) : (
+            casosFiltrados.map((caso) => (
+              <div
+                key={caso.id}
+                className="group flex items-center justify-between rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/50 hover:bg-card/80"
+              >
+                <Link href={`/casos/${caso.id}`} className="flex flex-1 items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                    <FolderOpen className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                      {caso.nombre}
+                    </h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {caso.fechaCreacion ? new Date(caso.fechaCreacion).toLocaleDateString("es-ES", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        }) : ""}
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="hidden sm:inline">{caso.audios ?? 0} audios</span>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="hidden sm:inline">{caso.transcripciones ?? 0} transcripciones</span>
+                    </div>
+                  </div>
+                </Link>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                      <span className="sr-only">Opciones</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 bg-popover border-border">
+                    <DropdownMenuItem asChild>
+                      <Link href={`/casos/${caso.id}`} className="flex cursor-pointer items-center">
+                        <Eye className="mr-2 h-4 w-4" />
+                        Ver detalles
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setCasoARenombrar({ id: caso.id, nombre: caso.nombre })
+                        setNuevoNombre(caso.nombre)
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Renombrar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setCasoAEliminar(caso.id)}
+                      className="cursor-pointer text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Eliminar caso
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ))
           )}
-        </>
-      )}
-    </div>
+        </div>
+
+        {/* Contador de casos */}
+        {casosFiltrados.length > 0 && (
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Mostrando {casosFiltrados.length} de {casos.length} casos
+          </p>
+        )}
+      </div>
+
+      {/* Dialog de eliminar */}
+      <Dialog open={!!casoAEliminar} onOpenChange={() => setCasoAEliminar(null)}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">¿Eliminar caso?</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Esta acción no se puede deshacer. Se eliminarán todos los audios y transcripciones asociados a este caso.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setCasoAEliminar(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => casoAEliminar && handleEliminar(casoAEliminar)}
+            >
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de renombrar */}
+      <Dialog open={!!casoARenombrar} onOpenChange={() => setCasoARenombrar(null)}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Renombrar caso</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Ingresa el nuevo nombre para este caso
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={nuevoNombre}
+            onChange={(e) => setNuevoNombre(e.target.value)}
+            placeholder="Nombre del caso"
+            className="bg-input border-border"
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setCasoARenombrar(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleRenombrar}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              disabled={!nuevoNombre.trim()}
+            >
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </main>
   );
 }
 
