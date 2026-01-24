@@ -63,7 +63,7 @@ function CasosPage() {
 
   return (
     <main className="min-h-screen bg-background p-6 md:p-10">
-      <div className="mx-auto max-w-5xl">
+      <div className="relative z-10 mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground md:text-4xl">

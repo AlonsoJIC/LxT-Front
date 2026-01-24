@@ -3,6 +3,7 @@ import { Header } from "@/components/header"
 import type { Metadata } from "next"
 import { Toaster } from "@/components/ui/toaster"
 import { LicenseWrapper } from "@/components/license/license-wrapper"
+import { AnimatedBackground } from "@/components/animated-background"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -26,7 +27,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className="dark">
-      <body className={`font-sans antialiased`}>
+      <body className="font-sans antialiased">
+        <AnimatedBackground />
         <LicenseWrapper>
             {/* Navbar/Header always visible */}
             <Header />

@@ -1,10 +1,8 @@
-// components/license/blocked-screen.tsx
 "use client";
 
 import { useState } from "react";
 import { Lock, Copy, Check, Mail, RefreshCw, ShoppingBag, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AnimatedBackground } from "@/components/animated-background";
 
 interface BlockedScreenProps {
   message: string;
@@ -67,7 +65,6 @@ export function BlockedScreen({ message, state, machineId, onRetry }: BlockedScr
       {/* Animated background para NO_LICENSE y EXPIRED */}
       {(state === "NO_LICENSE" || state === "EXPIRED") && (
         <>
-          <AnimatedBackground />
           <div className={`fixed inset-0 pointer-events-none z-0 ${
             state === "NO_LICENSE" 
               ? "bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-cyan-500/5"

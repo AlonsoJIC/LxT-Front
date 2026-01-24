@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Languages, Users, Zap, FileText, Shield, Cloud } from "lucide-react"
+import { SolidSection } from "@/components/ui/solid-section";
 import { useEffect, useState, useRef } from "react"
 
 const features = [
@@ -63,7 +64,7 @@ export function FeaturesSection() {
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature, index) => (
-            <Card
+              <SolidSection
               key={index}
               className={`border-border/50 transition-all duration-500 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 ${
                 visibleCards.includes(index) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
@@ -76,7 +77,7 @@ export function FeaturesSection() {
                 <h3 className="mb-2 font-semibold">{feature.title}</h3>
                 <p className="text-sm text-muted-foreground">{feature.description}</p>
               </CardContent>
-            </Card>
+              </SolidSection>
           ))}
         </div>
       </div>
