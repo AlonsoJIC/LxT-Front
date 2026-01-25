@@ -48,26 +48,15 @@ export async function listarAudiosCaso(casoId: string) {
     const res = await fetch(`${API_BASE}/casos/${casoId}/audio`);
     if (!res.ok) return [];
     const data = await res.json();
-    // Si la respuesta es { audios: ["nombre1.mp3", ...] }
+    // Nueva respuesta: { audios: [ { nombre, fecha, duracion, estado } ] }
     if (data && Array.isArray(data.audios)) {
-      return data.audios.map((nombre: string) => ({
-        id: nombre,
-        nombre,
-        fecha: "-",
-        duracion: "--:--",
-        transcripcion: null,
-        estado: "completado",
-      }));
-    }
-    // Si la respuesta es un array plano
-    if (Array.isArray(data)) {
-      return data.map((nombre) => ({
-        id: nombre,
-        nombre,
-        fecha: "-",
-        duracion: "--:--",
-        transcripcion: null,
-        estado: "completado",
+      return data.audios.map((audio: any) => ({
+        id: audio.nombre,
+        nombre: audio.nombre,
+        fecha: audio.fecha,
+        duracion: audio.duracion,
+        transcripcion: audio.transcripcion || null,
+        estado: audio.estado,
       }));
     }
     return [];
@@ -76,8 +65,12 @@ export async function listarAudiosCaso(casoId: string) {
   }
 }
 
-export async function eliminarAudioCaso(casoId: string, audioId: string) {
-  const res = await fetch(`${API_BASE}/casos/${casoId}/audio/${audioId}`, { method: "DELETE" });
+export async function eliminarAudioCaso(casoId: string, nombre: string) {
+  const res = await fetch(`${API_BASE}/casos/${casoId}/audio`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre })
+  });
   if (!res.ok) throw new Error("Error al eliminar el audio");
   return res.json();
 }

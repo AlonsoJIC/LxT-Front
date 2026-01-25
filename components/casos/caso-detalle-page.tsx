@@ -1,95 +1,57 @@
-
 "use client";
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { useParams } from "next/navigation";
+import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-// ...existing code...
-import Link from "next/link";
-import { listarCasos, eliminarCaso, subirAudio, listarAudiosCaso } from "@/lib/apiService";
-import { useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  Upload,
-  Mic,
-  Play,
-  FileAudio,
-  Calendar,
-  Clock,
-  MoreVertical,
-  Download,
-  Trash2,
-  Eye,
-  Square,
-  FileText,
-} from "lucide-react";
+import { listarCasos, subirAudio, listarAudiosCaso, eliminarAudioCaso, API_BASE } from "@/lib/apiService";
+import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, Upload, FileAudio, Calendar } from "lucide-react";
+import GrabadorAudioCard from "./GrabadorAudioCard";
+import AudioTable from "./audio-table";
+import TranscripcionModal from "./transcripcion-modal";
+interface CasoDetallePageProps {
+  casoId?: string;
+  onBack?: () => void;
+}
 
-export default function CasoDetallePage({ casoId, onBack }: { casoId: string, onBack: () => void }) {
+const CasoDetallePage: React.FC<CasoDetallePageProps> = ({ casoId: casoIdProp, onBack }) => {
   const [caso, setCaso] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [audios, setAudios] = useState<any[]>([]);
-  const [grabaciones, setGrabaciones] = useState<any[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
-  const [itemAEliminar, setItemAEliminar] = useState<{ id: string; tipo: "audio" | "grabacion" } | null>(null);
+  const [itemAEliminar, setItemAEliminar] = useState<{ id: string; nombre: string; tipo: "audio" | "grabacion" } | null>(null);
   const [transcripcionVisible, setTranscripcionVisible] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const router = useRouter();
+  const [audioEnReproduccion, setAudioEnReproduccion] = useState<string | null>(null);
+  const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({ });
+    const params = useParams();
+    const casoId = casoIdProp || (typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : undefined);
 
-  useEffect(() => {
-    listarCasos().then(data => {
-      const found = Array.isArray(data) ? data.find((c: any) => c.id === casoId) : null;
-      setCaso(found);
-      setGrabaciones(found?.grabaciones || []);
-    });
-    setLoading(true);
-    listarAudiosCaso(casoId).then(audiosRaw => {
-      // Map to ensure all required fields are present
-      const audios = audiosRaw.map((audio: any) => ({
-        id: audio.id || audio.nombre || audio,
-        nombre: audio.nombre || audio.id || audio,
-        fecha: audio.fecha || new Date().toISOString().split("T")[0],
-        duracion: audio.duracion || "--:--",
-        transcripcion: audio.transcripcion || null,
-        estado: audio.estado || "completado",
-      }));
-      setAudios(audios);
-      setLoading(false);
-    });
-  }, [casoId]);
-
+    useEffect(() => {
+      if (!casoId) return;
+      setLoading(true);
+      listarCasos().then(data => {
+        const found = Array.isArray(data) ? data.find((c: any) => c.id == casoId) : null;
+        setCaso(found);
+      });
+      listarAudiosCaso(casoId).then((audiosRaw: any[]) => {
+        const audios = audiosRaw.map((audio: any) => ({
+          ...audio,
+          fecha: audio.fecha ? new Date(audio.fecha) : null,
+          duracion: audio.duracion != null ? formatTime(audio.duracion) : '--:--',
+        }));
+        setAudios(audios);
+        setLoading(false);
+      });
+    }, [casoId]);
+  // Cleaned up: only use casoId
   const handleFiles = useCallback(async (files: FileList | null) => {
-    if (!files) return;
+    if (!files || typeof casoId !== 'string') return;
     const validFiles = Array.from(files).filter(file => file.type.startsWith("audio/"));
     if (validFiles.length === 0) return;
     for (const file of validFiles) {
-      // Mostrar audio en estado de subida
       const tempId = `uploading-${Date.now()}-${Math.random()}`;
       setAudios(prev => [
         {
@@ -98,18 +60,16 @@ export default function CasoDetallePage({ casoId, onBack }: { casoId: string, on
           fecha: new Date().toISOString().split("T")[0],
           duracion: "--:--",
           transcripcion: null,
-          estado: "subiendo",
+          estado: "Subiendo",
         },
         ...prev
       ]);
       try {
         await subirAudio(casoId, file);
-        // Refrescar lista real desde backend
         const actualizados = await listarAudiosCaso(casoId);
         setAudios(actualizados);
       } catch (e) {
         setAudios(prev => prev.filter(a => a.id !== tempId));
-        // Aquí podrías mostrar un toast de error si tienes sistema de notificaciones
       }
     }
   }, [casoId]);
@@ -122,7 +82,6 @@ export default function CasoDetallePage({ casoId, onBack }: { casoId: string, on
     e.preventDefault();
     setIsDragging(true);
   }, []);
-
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
@@ -134,121 +93,125 @@ export default function CasoDetallePage({ casoId, onBack }: { casoId: string, on
     handleFiles(e.dataTransfer.files);
   }, [handleFiles]);
 
-  const startRecording = async () => {
-    setIsRecording(true);
-    setRecordingTime(0);
-    setAudioChunks([]);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new window.MediaRecorder(stream);
-      setMediaRecorder(recorder);
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) setAudioChunks((prev) => [...prev, e.data]);
-      };
-      recorder.onstop = async () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-        setIsRecording(false);
-        setRecordingTime(0);
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const file = new File([audioBlob], `grabacion_${Date.now()}.webm`, { type: 'audio/webm' });
-        // Mostrar grabación en estado de subida
-        const tempId = `grabando-${Date.now()}-${Math.random()}`;
-        setGrabaciones(prev => [
-          {
-            id: tempId,
-            nombre: file.name,
-            fecha: new Date().toISOString().split("T")[0],
-            duracion: formatTime(recordingTime),
-            transcripcion: null,
-            estado: "subiendo",
-          },
-          ...prev
-        ]);
-        try {
-          await subirAudio(casoId, file);
-          // Refrescar lista real desde backend (si backend los separa, aquí deberías refrescar grabaciones)
-          const actualizados = await listarAudiosCaso(casoId);
-          setAudios(actualizados);
-          setGrabaciones(prev => prev.filter(g => g.id !== tempId));
-        } catch (e) {
-          setGrabaciones(prev => prev.filter(g => g.id !== tempId));
-        }
-      };
-      recorder.start();
-      timerRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
-      }, 1000);
-    } catch (e) {
-      setIsRecording(false);
-      setRecordingTime(0);
-    }
-  };
 
-  const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      mediaRecorder.stop();
-      setMediaRecorder(null);
+  const formatTime = (input: number | string) => {
+    let totalSeconds = 0;
+    if (typeof input === "string") {
+      // Si viene como string tipo "120.1234" o "00:02:00"
+      if (/^\d{2}:\d{2}:\d{2}$/.test(input)) return input; // ya está formateado
+      totalSeconds = Math.floor(parseFloat(input));
+    } else {
+      totalSeconds = Math.floor(input);
     }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     }
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   const handleEliminar = async () => {
     if (!itemAEliminar) return;
     if (itemAEliminar.tipo === "audio") {
-      setAudios(audios.filter((a) => a.id !== itemAEliminar.id));
+      if (!casoId || typeof casoId !== 'string') return;
+      try {
+        await eliminarAudioCaso(casoId, itemAEliminar.nombre);
+        const actualizados = await listarAudiosCaso(casoId);
+        setAudios(actualizados);
+        toast({
+          title: "Audio eliminado",
+          description: "El audio y su transcripción han sido eliminados correctamente.",
+        });
+      } catch (e) {
+        toast({
+          title: "Error al eliminar",
+          description: "No se pudo eliminar el audio. Intenta nuevamente.",
+          variant: "destructive",
+        });
+      }
     } else {
-      setGrabaciones(grabaciones.filter((g) => g.id !== itemAEliminar.id));
+      toast({
+        title: "Grabación eliminada",
+        description: "La grabación ha sido eliminada localmente.",
+      });
     }
     setItemAEliminar(null);
   };
 
-  const getEstadoBadge = (estado: string) => {
-    switch (estado) {
-      case "completado":
-        return <span className="inline-flex items-center rounded-full bg-green-500/10 px-2 py-1 text-xs font-medium text-green-500">Completado</span>;
-      case "pendiente":
-        return <span className="inline-flex items-center rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-500">Pendiente</span>;
-      case "procesando":
-        return <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">Procesando...</span>;
-      default:
-        return null;
-    }
-  };
-
-  if (!caso) return <div className="mt-10 text-center">Caso no encontrado</div>;
+  // Las funciones getEstadoBadge, handlePlay, handlePause y audioError ahora están en AudioTable
 
   return (
     <main className="min-h-screen bg-background p-6 md:p-10">
-      <div className="mx-auto max-w-6xl">
+      <div className="relative z-10 mx-auto max-w-6xl">
         {/* Header */}
         <div className="mb-8">
-          <Button variant="outline" onClick={onBack} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Button variant="outline" onClick={onBack || (() => window.history.back())} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Volver a casos
           </Button>
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-foreground md:text-3xl">
-              {caso.nombre}
+              {caso?.nombre}
             </h1>
             <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="h-4 w-4" />
-              Creado el {new Date(caso.fechaCreacion).toLocaleDateString("es-ES", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
+              Creado el {caso?.fechaCreacion ?
+                new Date(caso.fechaCreacion).toLocaleDateString("es-ES", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                }) : ""}
             </p>
           </div>
         </div>
-        {/* Loader solo para datos dinámicos */}
+        {/* Área de subir y grabar */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Drag and Drop para subir audio */}
+          <Card
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`relative cursor-pointer border-dashed p-8 transition-all duration-200 bg-card/50 border-gray-600 ${isDragging ? "border-primary bg-primary/5 scale-[1.02]" : "hover:border-muted-foreground hover:bg-secondary/50"}`}
+            style={{ minHeight: 220, backdropFilter: 'blur(2px)' }}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept="audio/*"
+              multiple
+              className="hidden"
+            />
+            <div className="flex flex-col items-center text-center">
+              <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full transition-colors ${isDragging ? "bg-primary/20" : "bg-secondary"}`}>
+                <Upload className={`h-6 w-6 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+              </div>
+              <h3 className="font-medium text-foreground">Subir archivos de audio</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Arrastra y suelta o haz clic para seleccionar
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                MP3, WAV, M4A, WEBM y más formatos soportados...
+              </p>
+            </div>
+            {isDragging && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-primary/10">
+                <p className="text-lg font-medium text-primary">Suelta para subir</p>
+              </div>
+            )}
+          </Card>
+          {/* GrabadorAudioCard para grabar audio */}
+          <GrabadorAudioCard onSubir={async (grabacion) => {
+            if (!casoId || typeof casoId !== 'string') return;
+            const file = new File([grabacion.blob], grabacion.nombre, { type: 'audio/webm' });
+            await subirAudio(casoId, file);
+            const actualizados = await listarAudiosCaso(casoId);
+            setAudios(actualizados);
+          }} />
+        </div>
         {loading ? (
           <div className="mt-10 flex flex-col items-center justify-center">
             <Spinner className="h-8 w-8 mb-4 text-primary animate-spin" />
@@ -256,342 +219,38 @@ export default function CasoDetallePage({ casoId, onBack }: { casoId: string, on
           </div>
         ) : (
           <>
-            {/* Área de subir y grabar */}
-            <div className="grid gap-4 md:grid-cols-2">
-              {/* Drag and Drop para subir audio */}
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`
-                  relative cursor-pointer rounded-xl border-2 border-dashed p-8 transition-all duration-200
-                  ${isDragging 
-                    ? "border-primary bg-primary/5 scale-[1.02]" 
-                    : "border-border hover:border-muted-foreground hover:bg-secondary/50"
-                  }
-                `}
-              >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept="audio/*"
-                  multiple
-                  className="hidden"
-                />
-                <div className="flex flex-col items-center text-center">
-                  <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full transition-colors ${isDragging ? "bg-primary/20" : "bg-secondary"}`}>
-                    <Upload className={`h-6 w-6 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
-                  </div>
-                  <h3 className="font-medium text-foreground">Subir archivos de audio</h3>
+            <div className="rounded-xl border border-border bg-card overflow-hidden mt-6">
+              <h2 className="text-lg font-semibold px-6 pt-6 pb-2">Audios y grabaciones ({audios.length})</h2>
+              {audios.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card p-12 text-center m-6">
+                  <FileAudio className="mb-4 h-16 w-16 text-muted-foreground" />
+                  <h3 className="text-lg font-medium text-foreground">No hay audios ni grabaciones</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Arrastra y suelta o haz clic para seleccionar
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    MP3, WAV, M4A hasta 100MB
+                    Sube o graba tu primer archivo de audio para comenzar
                   </p>
                 </div>
-                {isDragging && (
-                  <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-primary/10">
-                    <p className="text-lg font-medium text-primary">Suelta para subir</p>
-                  </div>
-                )}
-              </div>
-              {/* Grabar audio */}
-              <div className={`
-                rounded-xl border-2 p-8 transition-all duration-200
-                ${isRecording 
-                  ? "border-primary bg-gradient-to-br from-primary/10 to-primary/5" 
-                  : "border-border bg-card"
-                }
-              `}>
-                <div className="flex flex-col items-center text-center">
-                  {isRecording ? (
-                    <>
-                      {/* Estado grabando */}
-                      <div className="relative mb-4">
-                        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/20">
-                          <div className="h-14 w-14 rounded-full bg-primary/30 animate-pulse flex items-center justify-center">
-                            <div className="h-4 w-4 rounded-full bg-primary animate-ping" />
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-sm font-medium text-primary mb-1">Grabando...</p>
-                      <p className="text-4xl font-bold text-foreground tabular-nums mb-4">
-                        {formatTime(recordingTime)}
-                      </p>
-                      <Button
-                        onClick={stopRecording}
-                        size="lg"
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
-                      >
-                        <Square className="h-4 w-4 fill-current" />
-                        Detener grabación
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      {/* Estado sin grabar */}
-                      <button
-                        onClick={startRecording}
-                        className="group mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 transition-all hover:bg-primary/20 hover:scale-105 active:scale-95"
-                      >
-                        <Mic className="h-8 w-8 text-primary transition-transform group-hover:scale-110" />
-                      </button>
-                      <h3 className="font-medium text-foreground">Grabar audio</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Haz clic para comenzar a grabar
-                      </p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Se transcribirá automáticamente
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
+              ) : (
+                <AudioTable
+                  audios={audios}
+                  casoId={typeof casoId === 'string' ? casoId : ''}
+                  API_BASE={API_BASE}
+                  audioEnReproduccion={audioEnReproduccion}
+                  audioRefs={audioRefs}
+                  setTranscripcionVisible={setTranscripcionVisible}
+                  setItemAEliminar={setItemAEliminar}
+                />
+              )}
             </div>
-            {/* Tabs de contenido */}
-            <Tabs defaultValue="audios" className="w-full">
-              <TabsList className="mb-6 bg-secondary">
-                <TabsTrigger value="audios" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                  Audios subidos ({audios.length})
-                </TabsTrigger>
-                <TabsTrigger value="grabaciones" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                  Grabaciones ({grabaciones.length})
-                </TabsTrigger>
-              </TabsList>
-              {/* Tab Audios */}
-              <TabsContent value="audios">
-                {audios.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card p-12 text-center">
-                    <FileAudio className="mb-4 h-16 w-16 text-muted-foreground" />
-                    <h3 className="text-lg font-medium text-foreground">No hay audios</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Sube tu primer archivo de audio para comenzar
-                    </p>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-border bg-card overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-border hover:bg-transparent">
-                          <TableHead className="text-muted-foreground">Archivo</TableHead>
-                          <TableHead className="text-muted-foreground hidden sm:table-cell">Fecha</TableHead>
-                          <TableHead className="text-muted-foreground hidden md:table-cell">Duración</TableHead>
-                          <TableHead className="text-muted-foreground">Estado</TableHead>
-                          <TableHead className="text-muted-foreground text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {audios.map((audio) => (
-                          <TableRow key={audio.id} className="border-border">
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                                  <FileAudio className="h-5 w-5 text-primary" />
-                                </div>
-                                <span className="font-medium text-foreground truncate max-w-[200px]">
-                                  {audio.nombre}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground hidden sm:table-cell">
-                              {new Date(audio.fecha).toLocaleDateString("es-ES")}
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <span className="flex items-center gap-1 text-muted-foreground">
-                                <Clock className="h-3.5 w-3.5" />
-                                {audio.duracion}
-                              </span>
-                            </TableCell>
-                            <TableCell>{getEstadoBadge(audio.estado)}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-end gap-1">
-                                {/* Botón Ver transcripción visible directamente */}
-                                {audio.transcripcion && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setTranscripcionVisible(audio.id)}
-                                    className="text-primary hover:text-primary hover:bg-primary/10 gap-1.5"
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                    <span className="hidden lg:inline">Ver transcripción</span>
-                                  </Button>
-                                )}
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="bg-popover border-border">
-                                    <DropdownMenuItem className="cursor-pointer">
-                                      <Play className="mr-2 h-4 w-4" />
-                                      Reproducir
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem className="cursor-pointer">
-                                      <Download className="mr-2 h-4 w-4" />
-                                      Descargar
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => setItemAEliminar({ id: audio.id, tipo: "audio" })}
-                                      className="cursor-pointer text-destructive focus:text-destructive"
-                                    >
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      Eliminar
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </TabsContent>
-              {/* Tab Grabaciones */}
-              <TabsContent value="grabaciones">
-                {grabaciones.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card p-12 text-center">
-                    <Mic className="mb-4 h-16 w-16 text-muted-foreground" />
-                    <h3 className="text-lg font-medium text-foreground">No hay grabaciones</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Realiza tu primera grabación para comenzar
-                    </p>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-border bg-card overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-border hover:bg-transparent">
-                          <TableHead className="text-muted-foreground">Grabación</TableHead>
-                          <TableHead className="text-muted-foreground hidden sm:table-cell">Fecha</TableHead>
-                          <TableHead className="text-muted-foreground hidden md:table-cell">Duración</TableHead>
-                          <TableHead className="text-muted-foreground">Estado</TableHead>
-                          <TableHead className="text-muted-foreground text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {grabaciones.map((grabacion) => (
-                          <TableRow key={grabacion.id} className="border-border">
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                                  <Mic className="h-5 w-5 text-primary" />
-                                </div>
-                                <span className="font-medium text-foreground">
-                                  {grabacion.nombre}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground hidden sm:table-cell">
-                              {new Date(grabacion.fecha).toLocaleDateString("es-ES")}
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <span className="flex items-center gap-1 text-muted-foreground">
-                                <Clock className="h-3.5 w-3.5" />
-                                {grabacion.duracion}
-                              </span>
-                            </TableCell>
-                            <TableCell>{getEstadoBadge(grabacion.estado)}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-end gap-1">
-                                {/* Botón Ver transcripción visible directamente */}
-                                {grabacion.transcripcion && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setTranscripcionVisible(grabacion.id)}
-                                    className="text-primary hover:text-primary hover:bg-primary/10 gap-1.5"
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                    <span className="hidden lg:inline">Ver transcripción</span>
-                                  </Button>
-                                )}
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="bg-popover border-border">
-                                    <DropdownMenuItem className="cursor-pointer">
-                                      <Play className="mr-2 h-4 w-4" />
-                                      Reproducir
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem className="cursor-pointer">
-                                      <Download className="mr-2 h-4 w-4" />
-                                      Descargar
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => setItemAEliminar({ id: grabacion.id, tipo: "grabacion" })}
-                                      className="cursor-pointer text-destructive focus:text-destructive"
-                                    >
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      Eliminar
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-            {/* Dialog eliminar */}
-            <Dialog open={!!itemAEliminar} onOpenChange={() => setItemAEliminar(null)}>
-              <DialogContent className="bg-card border-border">
-                <DialogHeader>
-                  <DialogTitle className="text-foreground">
-                    ¿Eliminar {itemAEliminar?.tipo === "audio" ? "audio" : "grabación"}?
-                  </DialogTitle>
-                  <DialogDescription className="text-muted-foreground">
-                    Esta acción no se puede deshacer. Se eliminará el archivo y su transcripción asociada.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter className="gap-2 sm:gap-0">
-                  <Button variant="outline" onClick={() => setItemAEliminar(null)}>
-                    Cancelar
-                  </Button>
-                  <Button variant="destructive" onClick={handleEliminar}>
-                    Eliminar
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            {/* Dialog ver transcripción */}
-            <Dialog open={!!transcripcionVisible} onOpenChange={() => setTranscripcionVisible(null)}>
-              <DialogContent className="bg-card border-border max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-                <DialogHeader>
-                  <DialogTitle className="text-foreground">Transcripción</DialogTitle>
-                </DialogHeader>
-                <div className="flex-1 overflow-y-auto pr-2">
-                  <p className="text-foreground leading-relaxed whitespace-pre-wrap">
-                    {[...audios, ...grabaciones].find((item) => item.id === transcripcionVisible)?.transcripcion}
-                  </p>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setTranscripcionVisible(null)}>
-                    Cerrar
-                  </Button>
-                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Download className="mr-2 h-4 w-4" />
-                    Descargar
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <TranscripcionModal
+              open={!!transcripcionVisible}
+              onClose={() => setTranscripcionVisible(null)}
+              transcripcion={audios.find((item) => item.id === transcripcionVisible)?.transcripcion || ""}
+            />
           </>
         )}
       </div>
     </main>
   );
-}
+};
+
+export default CasoDetallePage;
