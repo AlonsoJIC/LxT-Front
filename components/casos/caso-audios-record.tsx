@@ -73,7 +73,7 @@ export default function CasoAudiosRecord({ casoId, onUpload }: { casoId: string,
         <Button onClick={startRecording} variant="default">Iniciar grabación</Button>
       )}
       {recording && (
-        <Button onClick={stopRecording} variant="destructive">Detener grabación</Button>
+        <Button onClick={stopRecording} variant="primary">Detener grabación</Button>
       )}
       {audioUrl && !recording && (
         <div className="flex flex-col gap-2">

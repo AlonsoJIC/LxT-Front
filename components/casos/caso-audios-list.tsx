@@ -56,7 +56,7 @@ export default function CasoAudiosList({ casoId }: { casoId: string }) {
           <span className="font-medium truncate max-w-[180px]">{audio.nombre || audio.filename}</span>
           <div className="flex gap-2 items-center">
             <audio controls src={audio.url || audio.localUrl || audio.path} className="max-w-[200px] bg-muted rounded" />
-            <Button size="sm" variant="destructive" onClick={() => handleEliminar(audio.id)} title="Eliminar audio">
+            <Button size="sm" variant="primary" onClick={() => handleEliminar(audio.id)} title="Eliminar audio">
               <span className="hidden md:inline">Eliminar</span>
               <span className="md:hidden">🗑️</span>
             </Button>

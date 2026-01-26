@@ -36,16 +36,20 @@ export default function CrearCasoPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center p-6">
+    <main className="min-h-screen bg-background flex items-center justify-center">
       <div className="relative z-10 w-full max-w-md">
         {/* Botón volver */}
-        <Link
-          href="/casos"
-          className="mb-8 inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+        <Button
+          asChild
+          variant="primary"
+          size="lg"
+          className="mb-8 inline-flex items-center text-sm"
         >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Volver a casos
-        </Link>
+          <Link href="/casos">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Volver a casos
+          </Link>
+        </Button>
         <Card>
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
@@ -96,7 +100,7 @@ export default function CrearCasoPage() {
                 )}
               </Button>
             </form>
-            <div className="mt-6 rounded-lg bg-muted/50 p-4">
+            <div className="m-6 rounded-lg bg-muted/50 p-4">
               <p className="text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">Tip:</span> Una vez creado el caso, 
                 podrás subir audios, grabar directamente y gestionar todas tus transcripciones.

@@ -2,7 +2,7 @@
 // Nueva UI adaptada de v0/casos/page.tsx, pero usando lógica real
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { listarCasos, eliminarCaso } from "@/lib/apiService";
+import { listarCasos, eliminarCaso, renombrarCaso } from "@/lib/apiService";
 import { Spinner } from "@/components/ui/spinner";
 import { Search, Plus, FolderOpen, MoreVertical, Eye, Pencil, Trash2, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,12 +24,14 @@ import {
 } from "@/components/ui/dialog";
 
 function CasosPage() {
+    const [loadingEliminar, setLoadingEliminar] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [casos, setCasos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [casoAEliminar, setCasoAEliminar] = useState<string | null>(null);
   const [casoARenombrar, setCasoARenombrar] = useState<{ id: string; nombre: string } | null>(null);
   const [nuevoNombre, setNuevoNombre] = useState("");
+  const [loadingRenombrar, setLoadingRenombrar] = useState(false);
 
   useEffect(() => {
     listarCasos().then(data => {
@@ -43,21 +45,34 @@ function CasosPage() {
   );
 
   const handleEliminar = async (id: string) => {
-    await eliminarCaso(id);
-    setCasos(casos => casos.filter((caso) => caso.id !== id));
-    setCasoAEliminar(null);
+    setLoadingEliminar(true);
+    try {
+      await eliminarCaso(id);
+      setCasos(casos => casos.filter((caso) => caso.id !== id));
+      setCasoAEliminar(null);
+    } finally {
+      setLoadingEliminar(false);
+    }
   };
 
+  // CORREGIDO: ahora sí hace la petición HTTP PATCH
   const handleRenombrar = async () => {
     if (casoARenombrar && nuevoNombre.trim()) {
-      // Aquí deberías llamar a tu API real para renombrar el caso si existe endpoint
-      setCasos(
-        casos.map((caso) =>
-          caso.id === casoARenombrar.id ? { ...caso, nombre: nuevoNombre.trim() } : caso
-        )
-      );
-      setCasoARenombrar(null);
-      setNuevoNombre("");
+      setLoadingRenombrar(true);
+      try {
+        await renombrarCaso(casoARenombrar.id, nuevoNombre.trim());
+        setCasos(
+          casos.map((caso) =>
+            caso.id === casoARenombrar.id ? { ...caso, nombre: nuevoNombre.trim() } : caso
+          )
+        );
+        setCasoARenombrar(null);
+        setNuevoNombre("");
+      } catch (e) {
+        alert("Error al renombrar el caso");
+      } finally {
+        setLoadingRenombrar(false);
+      }
     }
   };
 
@@ -86,8 +101,8 @@ function CasosPage() {
               className="pl-10 bg-card border-border focus:border-primary focus:ring-primary"
             />
           </div>
-          <Link href="/crear-caso">
-            <Button className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+          <Link href="/crear-caso" className="w-full sm:w-auto">
+            <Button variant="primary" className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Crear nuevo caso
             </Button>
@@ -110,7 +125,7 @@ function CasosPage() {
               </p>
               {!busqueda && (
                 <Link href="/crear-caso" className="mt-4">
-                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Button variant="primary">
                     <Plus className="mr-2 h-4 w-4" />
                     Crear caso
                   </Button>
@@ -145,43 +160,39 @@ function CasosPage() {
                       </div>
                     </div>
                   </Link>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                  <div className="flex gap-2 ml-4">
+                    <Link href={`/casos/${caso.id}`}>
                       <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        size="sm"
+                        variant="secondary"
+                        className="flex items-center gap-1"
                       >
-                        <MoreVertical className="h-4 w-4" />
-                        <span className="sr-only">Opciones</span>
+                        <Eye className="h-4 w-4" />
+                        <span className="hidden sm:inline">Ver detalles</span>
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48 bg-popover border-border">
-                      <DropdownMenuItem asChild>
-                        <Link href={`/casos/${caso.id}`} className="flex cursor-pointer items-center">
-                          <Eye className="mr-2 h-4 w-4" />
-                          Ver detalles
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setCasoARenombrar({ id: caso.id, nombre: caso.nombre })
-                          setNuevoNombre(caso.nombre)
-                        }}
-                        className="cursor-pointer"
-                      >
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Renombrar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setCasoAEliminar(caso.id)}
-                        className="cursor-pointer text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Eliminar caso
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    </Link>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                      onClick={() => {
+                        setCasoARenombrar({ id: caso.id, nombre: caso.nombre })
+                        setNuevoNombre(caso.nombre)
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      <span className="hidden sm:inline">Renombrar</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="flex items-center gap-1"
+                      onClick={() => setCasoAEliminar(caso.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="hidden sm:inline">Eliminar</span>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))
@@ -206,14 +217,19 @@ function CasosPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setCasoAEliminar(null)}>
+            <Button variant="outline" onClick={() => setCasoAEliminar(null)} disabled={loadingEliminar}>
               Cancelar
             </Button>
             <Button
-              variant="destructive"
+              variant="primary"
               onClick={() => casoAEliminar && handleEliminar(casoAEliminar)}
+              disabled={loadingEliminar}
             >
-              Eliminar
+              {loadingEliminar ? (
+                <span className="flex items-center gap-2"><Spinner className="h-4 w-4 animate-spin" />Eliminando...</span>
+              ) : (
+                "Eliminar"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -235,15 +251,19 @@ function CasosPage() {
             className="bg-input border-border"
           />
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setCasoARenombrar(null)}>
+            <Button variant="outline" onClick={() => setCasoARenombrar(null)} disabled={loadingRenombrar}>
               Cancelar
             </Button>
             <Button
               onClick={handleRenombrar}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={!nuevoNombre.trim()}
+              disabled={!nuevoNombre.trim() || loadingRenombrar}
             >
-              Guardar
+              {loadingRenombrar ? (
+                <span className="flex items-center gap-2"><Spinner className="h-4 w-4 animate-spin" />Guardando...</span>
+              ) : (
+                "Guardar"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

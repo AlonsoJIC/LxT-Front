@@ -147,7 +147,12 @@ const CasoDetallePage: React.FC<CasoDetallePageProps> = ({ casoId: casoIdProp, o
       <div className="relative z-10 mx-auto max-w-6xl">
         {/* Header */}
         <div className="mb-8">
-          <Button variant="outline" onClick={onBack || (() => window.history.back())} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={onBack || (() => window.history.back())}
+            className="mb-4 inline-flex items-center text-sm"
+          >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Volver a casos
           </Button>

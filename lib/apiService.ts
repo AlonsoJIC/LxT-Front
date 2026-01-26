@@ -1,3 +1,20 @@
+// Renombrar un caso
+export async function renombrarCaso(casoId: string, nuevoNombre: string) {
+  const res = await fetch(`http://127.0.0.1:8000/casos/${casoId}/nombre`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nuevo_nombre: nuevoNombre }),
+  });
+  if (res.status === 400) {
+    const data = await res.json();
+    throw new Error(data.detalle || "El nombre ya existe");
+  }
+  if (res.status === 404) {
+    throw new Error("El caso no existe");
+  }
+  if (!res.ok) throw new Error("Error al renombrar el caso");
+  return res.json();
+}
 /**
  * Descargar la transcripción en formato TXT
  * @param casoId ID del caso

@@ -173,7 +173,7 @@ const GrabadorAudioCard: React.FC<GrabadorAudioCardProps> = ({ onSubir }) => {
             <Button variant="outline" size="sm" onClick={e => { e.stopPropagation(); handleSubirGrabacion(item); }} disabled={item.estado === "Subiendo"}>
               Subir
             </Button>
-            <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); handleEliminarGrabacionLocal(item.id); }} title="Eliminar">
+            <Button variant="primary" size="icon" onClick={e => { e.stopPropagation(); handleEliminarGrabacionLocal(item.id); }} title="Eliminar">
               <Trash2 className="h-4 w-4 text-destructive" />
             </Button>
           </div>
