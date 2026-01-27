@@ -1,0 +1,28 @@
+/*
+  Animaciones personalizadas para LoadingIllustration y otros componentes visuales.
+*/
+
+@keyframes spin-slow {
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes stroke-dash {
+  0% {
+    stroke-dasharray: 0, 251.2;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dasharray: 125.6, 251.2;
+    stroke-dashoffset: -125.6;
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 2s linear infinite;
+}
+
+.animate-stroke-dash {
+  stroke-dasharray: 125.6, 251.2;
+  stroke-dashoffset: 0;
+  animation: stroke-dash 1.5s ease-in-out infinite;
+}

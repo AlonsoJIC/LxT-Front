@@ -1,11 +1,12 @@
 "use client";
-// Nueva UI adaptada de v0/casos/page.tsx, pero usando lógica real
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { listarCasos, eliminarCaso, renombrarCaso } from "@/lib/apiService";
-import { Spinner } from "@/components/ui/spinner";
+import { useToast } from "@/components/ui/use-toast";
+import LoadingIllustration from "@/components/ui/loading-illustration";
 import { Search, Plus, FolderOpen, MoreVertical, Eye, Pencil, Trash2, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -14,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
+import { OrderFilter, SortOption, FilterOption } from "@/components/ui/order-filter";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +26,18 @@ import {
 } from "@/components/ui/dialog";
 
 function CasosPage() {
-    const [loadingEliminar, setLoadingEliminar] = useState(false);
+  // Opciones de orden y filtro
+  const sortOptions: SortOption[] = [
+    { label: "Nombre (A-Z)", value: "nombre-asc" },
+    { label: "Nombre (Z-A)", value: "nombre-desc" },
+    { label: "Fecha de creación (reciente)", value: "fecha-desc" },
+  ];
+  const [sortValue, setSortValue] = useState<string>("fecha-desc");
+  // Si quieres filtrar por estado, tipo, etc., agrega aquí
+  const filterOptions: FilterOption[] = [];
+  const [filterValue, setFilterValue] = useState("");
+  const { toast } = useToast();
+  const [loadingEliminar, setLoadingEliminar] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [casos, setCasos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,9 +53,16 @@ function CasosPage() {
     });
   }, []);
 
-  const casosFiltrados = casos.filter((caso) =>
+  let casosFiltrados = casos.filter((caso) =>
     caso.nombre.toLowerCase().includes(busqueda.toLowerCase())
   );
+  // Ordenar según opción seleccionada
+  casosFiltrados = [...casosFiltrados].sort((a: { nombre: string; fechaCreacion: string }, b: { nombre: string; fechaCreacion: string }) => {
+    if (sortValue === "nombre-asc") return a.nombre.localeCompare(b.nombre);
+    if (sortValue === "nombre-desc") return b.nombre.localeCompare(a.nombre);
+    // fecha-desc
+    return new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime();
+  });
 
   const handleEliminar = async (id: string) => {
     setLoadingEliminar(true);
@@ -50,6 +70,16 @@ function CasosPage() {
       await eliminarCaso(id);
       setCasos(casos => casos.filter((caso) => caso.id !== id));
       setCasoAEliminar(null);
+      toast({
+        title: "Caso eliminado",
+        description: "El caso se eliminó correctamente.",
+      });
+    } catch (e) {
+      toast({
+        title: "Error al eliminar",
+        description: "No se pudo eliminar el caso. Intenta de nuevo.",
+        variant: "destructive",
+      });
     } finally {
       setLoadingEliminar(false);
     }
@@ -68,8 +98,16 @@ function CasosPage() {
         );
         setCasoARenombrar(null);
         setNuevoNombre("");
+        toast({
+          title: "Caso renombrado",
+          description: "El nombre del caso se actualizó correctamente.",
+        });
       } catch (e) {
-        alert("Error al renombrar el caso");
+        toast({
+          title: "Error al renombrar",
+          description: "No se pudo renombrar el caso. Intenta de nuevo.",
+          variant: "destructive",
+        });
       } finally {
         setLoadingRenombrar(false);
       }
@@ -89,17 +127,28 @@ function CasosPage() {
           </p>
         </div>
 
-        {/* Barra de búsqueda y botón crear */}
+        {/* Barra de búsqueda, orden y botón crear */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Buscar casos..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="pl-10 bg-card border-border focus:border-primary focus:ring-primary"
-            />
+          <div className="flex-1 flex flex-col gap-2">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Buscar casos..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="pl-10 bg-card border-border focus:border-primary focus:ring-primary"
+              />
+            </div>
+              <OrderFilter
+                sortOptions={sortOptions}
+                sortValue={sortValue}
+                onSortChange={setSortValue}
+                filterOptions={filterOptions}
+                filterValue={filterValue}
+                onFilterChange={setFilterValue}
+                className="mt-2"
+              />
           </div>
           <Link href="/crear-caso" className="w-full sm:w-auto">
             <Button variant="primary" className="w-full sm:w-auto">
@@ -112,21 +161,28 @@ function CasosPage() {
         {/* Lista de casos */}
         <div className="space-y-3">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-8">
-              <Spinner className="h-8 w-8 mb-4 text-primary animate-spin" />
-              <span className="text-muted-foreground">Cargando casos...</span>
-            </div>
+            <LoadingIllustration message="Cargando tus casos..." subtext="Un momento, estamos preparando tu espacio de trabajo." />
           ) : casosFiltrados.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card p-12 text-center">
-              <FolderOpen className="mb-4 h-16 w-16 text-muted-foreground" />
-              <h3 className="text-lg font-medium text-foreground">No se encontraron casos</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {busqueda ? "Intenta con otra búsqueda" : "Crea tu primer caso para comenzar"}
+            <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card p-12 text-center animate-fade-in">
+              {/* Ilustración SVG para estado vacío */}
+              <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-6 animate-float">
+                <rect x="16" y="32" width="64" height="40" rx="8" fill="#EEF2FF" />
+                <rect x="24" y="40" width="48" height="8" rx="4" fill="#C7D2FE" />
+                <rect x="24" y="52" width="32" height="8" rx="4" fill="#C7D2FE" />
+                <rect x="60" y="52" width="12" height="8" rx="4" fill="#A5B4FC" />
+                <rect x="36" y="60" width="24" height="4" rx="2" fill="#A5B4FC" />
+                <rect x="24" y="60" width="8" height="4" rx="2" fill="#C7D2FE" />
+                <rect x="64" y="60" width="8" height="4" rx="2" fill="#C7D2FE" />
+                <rect x="40" y="24" width="16" height="8" rx="4" fill="#6366F1" opacity="0.2" />
+              </svg>
+              <h3 className="text-xl font-semibold text-foreground mb-2">No tienes casos aún</h3>
+              <p className="mt-1 text-base text-muted-foreground">
+                {busqueda ? "No encontramos resultados para tu búsqueda. ¡Prueba con otro nombre!" : "Crea tu primer caso para comenzar a organizar tus transcripciones."}
               </p>
               {!busqueda && (
-                <Link href="/crear-caso" className="mt-4">
-                  <Button variant="primary">
-                    <Plus className="mr-2 h-4 w-4" />
+                <Link href="/crear-caso" className="mt-6 inline-block">
+                  <Button variant="primary" className="px-6 py-2 text-base animate-bounce-once">
+                    <Plus className="mr-2 h-5 w-5" />
                     Crear caso
                   </Button>
                 </Link>
@@ -161,37 +217,52 @@ function CasosPage() {
                     </div>
                   </Link>
                   <div className="flex gap-2 ml-4">
-                    <Link href={`/casos/${caso.id}`}>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="flex items-center gap-1"
-                      >
-                        <Eye className="h-4 w-4" />
-                        <span className="hidden sm:inline">Ver detalles</span>
-                      </Button>
-                    </Link>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                      onClick={() => {
-                        setCasoARenombrar({ id: caso.id, nombre: caso.nombre })
-                        setNuevoNombre(caso.nombre)
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                      <span className="hidden sm:inline">Renombrar</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      className="flex items-center gap-1"
-                      onClick={() => setCasoAEliminar(caso.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="hidden sm:inline">Eliminar</span>
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Link href={`/casos/${caso.id}`}>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="flex items-center gap-1"
+                          >
+                            <Eye className="h-4 w-4" />
+                            <span className="hidden sm:inline">Ver detalles</span>
+                          </Button>
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent>Ver detalles del caso</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="flex items-center gap-1"
+                          onClick={() => {
+                            setCasoARenombrar({ id: caso.id, nombre: caso.nombre })
+                            setNuevoNombre(caso.nombre)
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          <span className="hidden sm:inline">Renombrar</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Renombrar caso</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          className="flex items-center gap-1"
+                          onClick={() => setCasoAEliminar(caso.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span className="hidden sm:inline">Eliminar</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Eliminar caso</TooltipContent>
+                    </Tooltip>
                   </div>
                 </CardContent>
               </Card>
@@ -226,7 +297,7 @@ function CasosPage() {
               disabled={loadingEliminar}
             >
               {loadingEliminar ? (
-                <span className="flex items-center gap-2"><Spinner className="h-4 w-4 animate-spin" />Eliminando...</span>
+                <span className="flex items-center gap-2 animate-pulse">Eliminando...</span>
               ) : (
                 "Eliminar"
               )}
@@ -260,7 +331,7 @@ function CasosPage() {
               disabled={!nuevoNombre.trim() || loadingRenombrar}
             >
               {loadingRenombrar ? (
-                <span className="flex items-center gap-2"><Spinner className="h-4 w-4 animate-spin" />Guardando...</span>
+                <span className="flex items-center gap-2 animate-pulse">Guardando...</span>
               ) : (
                 "Guardar"
               )}

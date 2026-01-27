@@ -82,7 +82,7 @@ export function HeroSection() {
           >
             <div className="flex items-center gap-2">
               <div className="h-1 w-1 rounded-full bg-accent animate-pulse"></div>
-              <span>90% precisión</span>
+              <span>96% precisión</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="h-1 w-1 rounded-full bg-accent animate-pulse"></div>

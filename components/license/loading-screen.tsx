@@ -1,5 +1,5 @@
 // components/license/loading-screen.tsx
-import { Spinner } from "@/components/ui/spinner";
+import LoadingIllustration from "@/components/ui/loading-illustration";
 import Image from "next/image";
 
 export function LoadingScreen() {
@@ -17,13 +17,7 @@ export function LoadingScreen() {
           />
         </div>
         
-        {/* Spinner */}
-        <Spinner className="w-12 h-12" />
-        
-        {/* Mensaje */}
-        <p className="text-lg text-muted-foreground">
-          Verificando sistema de seguridad...
-        </p>
+        <LoadingIllustration message="Verificando sistema de seguridad..." subtext="Por favor espera unos segundos mientras validamos tu entorno." className="py-0" />
       </div>
     </div>
   );

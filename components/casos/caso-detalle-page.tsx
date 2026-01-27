@@ -2,12 +2,13 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
+import LoadingIllustration from "@/components/ui/loading-illustration";
 import { listarCasos, subirAudio, listarAudiosCaso, eliminarAudioCaso, API_BASE } from "@/lib/apiService";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Upload, FileAudio, Calendar } from "lucide-react";
 import GrabadorAudioCard from "./GrabadorAudioCard";
+import { OrderFilter, SortOption, FilterOption } from "@/components/ui/order-filter";
 import AudioTable from "./audio-table";
 import TranscripcionModal from "./transcripcion-modal";
 interface CasoDetallePageProps {
@@ -19,6 +20,16 @@ const CasoDetallePage: React.FC<CasoDetallePageProps> = ({ casoId: casoIdProp, o
   const [caso, setCaso] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [audios, setAudios] = useState<any[]>([]);
+  // Orden y filtro para audios
+  const sortOptions: SortOption[] = [
+    { label: "Nombre (A-Z)", value: "nombre-asc" },
+    { label: "Nombre (Z-A)", value: "nombre-desc" },
+    { label: "Fecha (reciente)", value: "fecha-desc" },
+  ];
+  const [sortValue, setSortValue] = useState("fecha-desc");
+  // Si quieres filtrar por estado, tipo, etc., agrega aquí
+  const filterOptions: FilterOption[] = [];
+  const [filterValue, setFilterValue] = useState("");
   const [itemAEliminar, setItemAEliminar] = useState<{ id: string; nombre: string; tipo: "audio" | "grabacion" } | null>(null);
   const [transcripcionVisible, setTranscripcionVisible] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -68,11 +79,20 @@ const CasoDetallePage: React.FC<CasoDetallePageProps> = ({ casoId: casoIdProp, o
         await subirAudio(casoId, file);
         const actualizados = await listarAudiosCaso(casoId);
         setAudios(actualizados);
+        toast({
+          title: "Audio subido",
+          description: `El archivo '${file.name}' se subió correctamente.`,
+        });
       } catch (e) {
         setAudios(prev => prev.filter(a => a.id !== tempId));
+        toast({
+          title: "Error al subir audio",
+          description: `No se pudo subir '${file.name}'. Intenta de nuevo.`,
+          variant: "destructive",
+        });
       }
     }
-  }, [casoId]);
+  }, [casoId, toast]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     handleFiles(e.target.files);
@@ -141,6 +161,21 @@ const CasoDetallePage: React.FC<CasoDetallePageProps> = ({ casoId: casoIdProp, o
   };
 
   // Las funciones getEstadoBadge, handlePlay, handlePause y audioError ahora están en AudioTable
+
+  // Ordenar y filtrar audios
+  let audiosFiltrados = audios;
+  // Aquí podrías filtrar por estado/tipo si lo deseas
+  function safeDate(fecha: string | Date | undefined | null): number {
+    if (!fecha) return 0;
+    const d = typeof fecha === 'string' ? new Date(fecha) : fecha;
+    return d instanceof Date && !isNaN(d.getTime()) ? d.getTime() : 0;
+  }
+  audiosFiltrados = [...audiosFiltrados].sort((a, b) => {
+    if (sortValue === "fecha-desc") return safeDate(b.fecha) - safeDate(a.fecha);
+    if (sortValue === "nombre-asc") return a.nombre.localeCompare(b.nombre);
+    if (sortValue === "nombre-desc") return b.nombre.localeCompare(a.nombre);
+    return 0;
+  });
 
   return (
     <main className="min-h-screen bg-background p-6 md:p-10">
@@ -212,21 +247,41 @@ const CasoDetallePage: React.FC<CasoDetallePageProps> = ({ casoId: casoIdProp, o
           <GrabadorAudioCard onSubir={async (grabacion) => {
             if (!casoId || typeof casoId !== 'string') return;
             const file = new File([grabacion.blob], grabacion.nombre, { type: 'audio/webm' });
-            await subirAudio(casoId, file);
-            const actualizados = await listarAudiosCaso(casoId);
-            setAudios(actualizados);
+            try {
+              await subirAudio(casoId, file);
+              const actualizados = await listarAudiosCaso(casoId);
+              setAudios(actualizados);
+              toast({
+                title: "Grabación subida",
+                description: `La grabación '${grabacion.nombre}' se subió correctamente.`,
+              });
+            } catch (e) {
+              toast({
+                title: "Error al subir grabación",
+                description: `No se pudo subir '${grabacion.nombre}'. Intenta de nuevo.`,
+                variant: "destructive",
+              });
+            }
           }} />
         </div>
+        {/* Orden y filtro de audios */}
+        <div className="mb-2 mt-6">
+          <OrderFilter
+            sortOptions={sortOptions}
+            sortValue={sortValue}
+            onSortChange={setSortValue}
+            filterOptions={filterOptions}
+            filterValue={filterValue}
+            onFilterChange={setFilterValue}
+          />
+        </div>
         {loading ? (
-          <div className="mt-10 flex flex-col items-center justify-center">
-            <Spinner className="h-8 w-8 mb-4 text-primary animate-spin" />
-            <span className="text-muted-foreground">Cargando audios y grabaciones...</span>
-          </div>
+          <LoadingIllustration message="Cargando audios y grabaciones..." subtext="Un momento, estamos preparando tu espacio de trabajo." className="mt-10" />
         ) : (
           <>
             <div className="rounded-xl border border-border bg-card overflow-hidden mt-6">
               <h2 className="text-lg font-semibold px-6 pt-6 pb-2">Audios y grabaciones ({audios.length})</h2>
-              {audios.length === 0 ? (
+              {audiosFiltrados.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card p-12 text-center m-6">
                   <FileAudio className="mb-4 h-16 w-16 text-muted-foreground" />
                   <h3 className="text-lg font-medium text-foreground">No hay audios ni grabaciones</h3>
@@ -236,7 +291,7 @@ const CasoDetallePage: React.FC<CasoDetallePageProps> = ({ casoId: casoIdProp, o
                 </div>
               ) : (
                 <AudioTable
-                  audios={audios}
+                  audios={audiosFiltrados}
                   casoId={typeof casoId === 'string' ? casoId : ''}
                   API_BASE={API_BASE}
                   audioEnReproduccion={audioEnReproduccion}

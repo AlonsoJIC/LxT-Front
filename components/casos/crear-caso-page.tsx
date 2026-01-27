@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { crearCaso } from "@/lib/apiService";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function CrearCasoPage() {
+  const { toast } = useToast();
   const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -23,12 +25,28 @@ export default function CrearCasoPage() {
     setError(null);
     try {
       const nuevoCaso = await crearCaso(nombre.trim());
-      router.push(`/casos/${nuevoCaso.id}`);
+      toast({
+        title: "Caso creado",
+        description: "El caso se creó correctamente.",
+      });
+      setTimeout(() => {
+        router.push(`/casos/${nuevoCaso.id}`);
+      }, 500); // Permite que el toast se muestre antes de redirigir
     } catch (err: any) {
       if (err instanceof Error && err.message && err.message.includes("400")) {
         setError("Ya existe un caso con ese nombre. Elige un nombre diferente.");
+        toast({
+          title: "Nombre duplicado",
+          description: "Ya existe un caso con ese nombre.",
+          variant: "destructive",
+        });
       } else {
         setError("No se pudo crear el caso. Intenta de nuevo.");
+        toast({
+          title: "Error al crear",
+          description: "No se pudo crear el caso. Intenta de nuevo.",
+          variant: "destructive",
+        });
       }
     } finally {
       setIsLoading(false);

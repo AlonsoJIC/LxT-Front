@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import LoadingIllustration from "@/components/ui/loading-illustration";
 import { listarAudiosCaso, eliminarAudioCaso } from "@/lib/apiService";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -41,10 +42,7 @@ export default function CasoAudiosList({ casoId }: { casoId: string }) {
   };
 
   if (loading) return (
-    <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
-      <svg className="w-5 h-5 animate-spin text-primary" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
-      Cargando audios...
-    </div>
+    <LoadingIllustration message="Cargando audios..." subtext="Un momento, estamos preparando la lista de audios." />
   );
 
   return (
